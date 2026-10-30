@@ -2,14 +2,15 @@
 // 同じ経路を「図と手順」（この画面のパネル）と「立体」（床の矢印・案内カード）の両方で見せる。手順を押すとその場所へ立体で飛ぶ。
 // 地上の歩道にも床があるので、出発から立体で歩ける。立体に床の無い点（地下 2 階・データの範囲外）の区間だけ図と手順で案内する。
 
-import { Guide, lvName } from './guide.js?v=mvv0mb18';
-import { startRoom, roomId } from './room.js?v=mvv0mb18';
+import { Guide, lvName } from './guide.js?v=mvv1hrun';
+import { startRoom, roomId } from './room.js?v=mvv1hrun';
 
 export async function initMeet(A) {
   const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared, setMeetRoute, clearRoute } = A;
   let D;
   try { D = await fetch(`data/meet.json${VER}`).then((r) => r.json()); } catch { return; }
   const G = new Guide(D);
+  let detour = null, comp = null; // exitDetour・groundTree が一度だけ作るもの（run が読み込みの途中で呼ぶので、先に置く）
   const N = (i) => D.nodes[i];
   // 統合データの階 → この画面の階（JR の数え方: 1F が 1）。地下 2 階以下は床が無い
   const WL = (lv) => (lv === 0 ? 1 : lv === 1 ? 2 : lv === -1 ? -1 : null);
@@ -146,39 +147,7 @@ export async function initMeet(A) {
         // 地上どうしの線が出口の階段（坂）の上を横切るときは、階段の口の 2 m 先の角を回る（階段室の横の壁に当たった）。回る点を足したあとの線も
         // 確かめ直す（出口の階段が 3 つ固まった所で、1 つ目を回る点が 2 つ目の口にかかった。池袋の (133,-14)）
         if (q && p.l === 1 && q.l === 1 && data.ramps) {
-          const onFloor = (k) => phys.surfacesAt(k.x, k.y).some((z) => z > 31 && z < 36);
-          const geo = data.ramps.filter((r) => r.exit).map((r) => { const L = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]) || 1; return { r, L, ux: (r.b[0] - r.a[0]) / L, uy: (r.b[1] - r.a[1]) / L, hw: r.w / 2 + 0.6 }; });
-          const inR = (g, x, y) => { const al = (x - g.r.a[0]) * g.ux + (y - g.r.a[1]) * g.uy, sd = Math.abs((x - g.r.a[0]) * -g.uy + (y - g.r.a[1]) * g.ux); return al > -0.5 && al < g.L + 0.8 && sd < g.hw + 0.25; }; // 上の端の先 0.8 m・横は体の半径ぶん広く（坂の横の壁の端に当たった。池袋の (137,-10)）
-          const crosses = (a, b) => geo.find((g) => { if (inR(g, a.x, a.y) || inR(g, b.x, b.y)) return false; const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.3); for (let k = 1; k < n; k++) { const u = k / n; if (inR(g, a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u)) return true; } return false; });
-          // 回り方: 近くの出口の階段の四隅（少し外）を点にして、横切らない線だけで a から b までのいちばん短い道を探す。
-          // 1 本ずつ角を回る作り方では、出口の階段が 3 つ固まった所で行ったり来たりした（池袋の (133,-13)〜(139,-11)。2026-10-30）
-          const route = (a, b) => {
-            if (!crosses(a, b)) return [];
-            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, R = Math.hypot(b.x - a.x, b.y - a.y) / 2 + 25;
-            const ns = [a, b];
-            for (const g of geo) {
-              if (Math.hypot(g.r.a[0] - mx, g.r.a[1] - my) > R + g.L) continue;
-              for (const al of [-1.0, g.L + 2.0]) for (const sg of [1, -1]) {
-                const o = g.hw + 0.8, k = { x: g.r.a[0] + g.ux * al - g.uy * o * sg, y: g.r.a[1] + g.uy * al + g.ux * o * sg, l: 1, lv: 0, around: 1 };
-                if (onFloor(k) && !geo.some((h) => inR(h, k.x, k.y))) ns.push(k);
-              }
-            }
-            const n = ns.length, dist = new Array(n).fill(Infinity), from = new Array(n).fill(-1), done = new Array(n).fill(false);
-            dist[0] = 0;
-            for (;;) {
-              let u = -1; for (let i = 0; i < n; i++) if (!done[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
-              if (u < 0 || u === 1) break;
-              done[u] = true;
-              for (let v = 0; v < n; v++) {
-                if (done[v] || v === u) continue;
-                const d = dist[u] + Math.hypot(ns[v].x - ns[u].x, ns[v].y - ns[u].y);
-                if (d < dist[v] && !crosses(ns[u], ns[v])) { dist[v] = d; from[v] = u; }
-              }
-            }
-            if (from[1] < 0) return [];
-            const out = []; for (let v = from[1]; v > 0; v = from[v]) out.unshift(ns[v]);
-            return out;
-          };
+          const route = exitDetour();
           walkPts.push(...route(q, p));
         }
         map[i] = walkPts.length; walkPts.push(p); prev = p;
@@ -281,11 +250,52 @@ export async function initMeet(A) {
     $('meetPanel').hidden = false;
   }
   if (q.get('room') && q.get('role')) startShare(q.get('role'), q.get('room'));
+  // 地上の 2 点のあいだが出口の階段（坂）の上を横切るとき、階段の四隅（少し外）を回る点（run の立体の道筋と、groundTree の道で使う）
+  function exitDetour() {
+    if (detour) return detour;
+    const onFloor = (k) => phys.surfacesAt(k.x, k.y).some((z) => z > 31 && z < 36);
+    const geo = data.ramps.filter((r) => r.exit).map((r) => { const L = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]) || 1; return { r, L, ux: (r.b[0] - r.a[0]) / L, uy: (r.b[1] - r.a[1]) / L, hw: r.w / 2 + 0.6 }; });
+    const inR = (g, x, y) => { const al = (x - g.r.a[0]) * g.ux + (y - g.r.a[1]) * g.uy, sd = Math.abs((x - g.r.a[0]) * -g.uy + (y - g.r.a[1]) * g.ux); return al > -0.5 && al < g.L + 0.8 && sd < g.hw + 0.25; }; // 上の端の先 0.8 m・横は体の半径ぶん広く（坂の横の壁の端に当たった。池袋の (137,-10)）
+    const crosses = (a, b) => geo.find((g) => { if (inR(g, a.x, a.y) || inR(g, b.x, b.y)) return false; const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.3); for (let k = 1; k < n; k++) { const u = k / n; if (inR(g, a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u)) return true; } return false; });
+    // 回り方: 近くの出口の階段の四隅（少し外）を点にして、横切らない線だけで a から b までのいちばん短い道を探す。
+    // 1 本ずつ角を回る作り方では、出口の階段が 3 つ固まった所で行ったり来たりした（池袋の (133,-13)〜(139,-11)。2026-10-30）
+    // 回る線が建物などの壁を横切らないか（地上の床の 1 m 上の壁の線。出口の階段の角を回る線が建物の角を横切り、止まった。2026-10-30）
+    const X = (p, q, r, t) => { const d = (q[0] - p[0]) * (t[1] - r[1]) - (q[1] - p[1]) * (t[0] - r[0]); if (Math.abs(d) < 1e-9) return false; const u = ((r[0] - p[0]) * (t[1] - r[1]) - (r[1] - p[1]) * (t[0] - r[0])) / d, v = ((r[0] - p[0]) * (q[1] - p[1]) - (r[1] - p[1]) * (q[0] - p[0])) / d; return u > 0 && u < 1 && v > 0 && v < 1; };
+    const wallCut = (a, b) => { const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, r = Math.hypot(b.x - a.x, b.y - a.y) / 2 + 0.5; return phys.segsNear(mx, my, (data.levels['1'] ? data.levels['1'].z : 0) + 1.0, r).some(([x1, y1, x2, y2]) => !geo.some((g) => inR(g, (x1 + x2) / 2, (y1 + y2) / 2)) && X([a.x, a.y], [b.x, b.y], [x1, y1], [x2, y2])); }; // 出口の階段室の壁は除く（回る点は階段のそばなので、階段室の壁で回り道がふさがった）
+    detour = (a, b) => {
+      if (!crosses(a, b)) return [];
+      const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, R = Math.hypot(b.x - a.x, b.y - a.y) / 2 + 25;
+      const ns = [a, b];
+      for (const g of geo) {
+        if (Math.hypot(g.r.a[0] - mx, g.r.a[1] - my) > R + g.L) continue;
+        for (const al of [-1.0, g.L + 2.0]) for (const sg of [1, -1]) {
+          const o = g.hw + 0.8, k = { x: g.r.a[0] + g.ux * al - g.uy * o * sg, y: g.r.a[1] + g.uy * al + g.ux * o * sg, l: 1, lv: 0, around: 1 };
+          if (onFloor(k) && !geo.some((h) => inR(h, k.x, k.y))) ns.push(k);
+        }
+      }
+      const n = ns.length, dist = new Array(n).fill(Infinity), from = new Array(n).fill(-1), done = new Array(n).fill(false);
+      dist[0] = 0;
+      for (;;) {
+        let u = -1; for (let i = 0; i < n; i++) if (!done[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
+        if (u < 0 || u === 1) break;
+        done[u] = true;
+        for (let v = 0; v < n; v++) {
+          if (done[v] || v === u) continue;
+          const d = dist[u] + Math.hypot(ns[v].x - ns[u].x, ns[v].y - ns[u].y);
+          if (d < dist[v] && !crosses(ns[u], ns[v]) && !wallCut(ns[u], ns[v])) { dist[v] = d; from[v] = u; }
+        }
+      }
+      if (from[1] < 0) return [];
+      const out = []; for (let v = from[1]; v > 0; v = from[v]) out.unshift(ns[v]);
+      return out;
+    };
+    detour.inside = (x, y) => geo.some((g) => inR(g, x, y)); // 出口の階段（坂）の上（口の先 0.8 m まで）
+    return detour;
+  }
   // 地上にいるときの道の木: いまいる所のそばの地上の点から、地上（階 0: 歩道・JR の 1F）の線をたどった道のり。歩く画面の「出発・行き先」で、地上から
   // 駅の経路網（JR の 1F の点）までの道に使う（app.js の findRoute。歩く画面の経路網には地上の歩道が無く、まっすぐ建物を横切った。2026-10-30）。
   // 出口の階段で地下へ下りる道は使わない（待ち合わせの経路網の階段の線は、歩く立体の出口の階段の向き・位置と違い、階段室の壁に当たった）。
   // reach: (x, y) から r m 以内の階 lv の行ける点のうち、道のり + 残りがいちばん短いもの。path: そこまでの点（歩く画面の階）
-  let comp = null; // 地上の線でつながるかたまりの大きさ（点ごと）
   function groundTree(ax, ay) {
     if (!comp) {
       comp = new Int32Array(D.nodes.length);
@@ -315,7 +325,13 @@ export async function initMeet(A) {
         D.nodes.forEach((m, i) => { if (m[2] !== lv || dist[i] === Infinity) return; const q = Math.hypot(m[0] - x, m[1] - y); if (q <= r && dist[i] + q < bt) { bt = dist[i] + q; t = i; } });
         return t < 0 ? null : { node: t, cost: bs + bt };
       },
-      path(t) { const out = []; for (let v = t; v >= 0; v = prev[v]) out.unshift([N(v)[0], N(v)[1], WL(N(v)[2])]); return out; },
+      path(t) { // 出口の階段の上を横切る所は回る
+        let ps = []; for (let v = t; v >= 0; v = prev[v]) ps.unshift({ x: N(v)[0], y: N(v)[1], l: WL(N(v)[2]) });
+        const rt = data.ramps ? exitDetour() : null, out = [];
+        if (rt) ps = ps.filter((p, k) => k === ps.length - 1 || !rt.inside(p.x, p.y)); // 出口の階段の上にある地上の点は飛ばす（階段室の壁に当たった）
+        ps.forEach((p, k) => { if (k && rt) for (const q of rt(ps[k - 1], p)) out.push([q.x, q.y, 1]); out.push([p.x, p.y, p.l]); });
+        return out;
+      },
     };
   }
   return { run, render, groundTree, get cur() { return cur; }, get partner() { return partner; }, get room() { return room; }, startShare, stopShare };
