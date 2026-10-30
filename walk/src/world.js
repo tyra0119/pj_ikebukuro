@@ -401,7 +401,7 @@ export function buildWorld(data, mallBuf, scene) {
   // 床の無いすき間があった。東京の八重洲側のエスカレーター）。同じ高さの床と重なる所は、ちらつかないようにわずかに上げる
   for (const r of data.ramps) {
     const len = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]), ux = (r.b[0] - r.a[0]) / len, uy = (r.b[1] - r.a[1]) / len, nx = (-uy * r.w) / 2, ny = (ux * r.w) / 2;
-    for (const [p, dir, z] of [[r.b, 1, r.b[2]], [r.a, -1, r.a[2]]]) {
+    for (const [p, dir, z] of r.top ? [[r.b, 1, r.b[2]]] : [[r.b, 1, r.b[2]], [r.a, -1, r.a[2]]]) { // PLATEAU の階段の上の端に付けた坂（top）は、下の端の降り口の床を張らない（階段のいちばん上の段の上に平らな床が重なった）
       const ex = p[0] + ux * dir * 1.8, ey = p[1] + uy * dir * 1.8, zz = z + 0.004;
       const q = [[p[0] - nx, p[1] - ny], [p[0] + nx, p[1] + ny], [ex + nx, ey + ny], [ex - nx, ey - ny]];
       for (const [a, b, c] of [[q[0], q[1], q[2]], [q[0], q[2], q[3]]]) {

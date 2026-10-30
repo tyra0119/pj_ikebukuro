@@ -111,7 +111,7 @@ export async function initMeet(A) {
   // ---- 経路 → 立体の道筋。床のある最初の点から（地上の歩道にも床がある。無いのは地下 2 階・データの範囲外）
   function toPts(E) {
     const ids = [E[0].a, ...E.map((e) => e.b)];
-    const pts = ids.map((i, k) => { const n = N(i); const l = WL(n[2]); const e = k ? E[k - 1] : null; return { x: n[0], y: n[1], l: l ?? -1, lv: n[2], mode: e ? (e.mode === 2 ? 2 : e.mode === 4 ? 4 : e.mode === 5 ? 5 : undefined) : undefined, ground: l == null || !landingAt(n[0], n[1], l, false) }; }); // ground: 立体に床の無い点（地下 2 階、データの範囲外）。地上の歩道には床があるので歩ける（2026-10-30）。以前の注: 階 0 以上は JR の点（ホーム・コンコース）だけ歩ける。地上の歩道・OSM の出入口の点には床が無い
+    const pts = ids.map((i, k) => { const n = N(i); const l = WL(n[2]); const e = k ? E[k - 1] : null; return { x: n[0], y: n[1], z: n[3], l: l ?? -1, lv: n[2], mode: e ? (e.mode === 2 ? 2 : e.mode === 4 ? 4 : e.mode === 5 ? 5 : undefined) : undefined, ground: l == null || !landingAt(n[0], n[1], l, false) }; }); // ground: 立体に床の無い点（地下 2 階、データの範囲外）。地上の歩道には床があるので歩ける（2026-10-30）。以前の注: 階 0 以上は JR の点（ホーム・コンコース）だけ歩ける。地上の歩道・OSM の出入口の点には床が無い
     let first = -1;
     for (let k = 0; k < pts.length; k++) { const p = pts[k]; if (p.ground) continue; if (landingAt(p.x, p.y, p.l, true)) { first = k; break; } }
     return { pts, first };
@@ -126,12 +126,49 @@ export async function initMeet(A) {
     const u = new URL(location.href); u.searchParams.set('mfrom', from.id); u.searchParams.set('mto', to.id); u.searchParams.set('pr', pr); history.replaceState(null, '', u);
     // 立体の案内: 床のある部分の道筋を固定の経路として渡す
     if (first >= 0) {
-      const walkPts = pts.slice(first).filter((p) => !p.ground);
+      const walkPts0 = pts.slice(first).filter((p) => !p.ground);
+      // 地下 1 階どうしの点のあいだは、歩く画面のます目の経路探索（床・壁・上れる段差を見る）でつなぐ。案内の線をまっすぐ結ぶと、手すりの
+      // あいだや折り返し階段の踊り場を通って進めない所があった（2026-10-30 地上からの通しの点検）。探索の道が遠回りすぎるときはまっすぐのまま
+      const gp = window.ekisanpo && window.ekisanpo.gridPath;
+      const walkPts = [], map = [];
+      // ます目で行けない点（階段の中・手すりのあいだにある案内の点）は飛ばして、前後の点をつなぐ（最初と最後、上り下りの点は残す）
+      const reach = (p) => { if (!gp || p.l !== -1) return true; const g = gp(p.x, p.y, p.x + 0.01, p.y); return !g || Math.hypot(g[0][0] - p.x, g[0][1] - p.y) < 1.0; };
+      let prev = null;
+      walkPts0.forEach((p, i) => {
+        const nearLv = [1, 2, 3].some((d) => walkPts0[i + d] && (walkPts0[i + d].l !== p.l || walkPts0[i + d].mode === 4 || walkPts0[i + d].mode === 5)); // 階が変わる・エスカレーター・エレベーターの手前 3 つの点（出口の階段の足元とその手前）は残す
+        const keep = i === 0 || i === walkPts0.length - 1 || p.l !== -1 || p.mode === 4 || p.mode === 5 || (prev && prev.l !== -1) || nearLv || reach(p);
+        if (!keep) { map[i] = walkPts.length; return; }
+        const q = prev;
+        if (q && gp && p.l === -1 && q.l === -1 && p.mode !== 4 && p.mode !== 5 && !(q.z > 29.6) && !(p.z > 29.6)) { // ます目の高さ（地下 1 階の 2 m 上まで）より高い点（階段の上の端など）はつながない（ます目は下の床を通る）
+          const g = gp(q.x, q.y, p.x, p.y), straight = Math.hypot(p.x - q.x, p.y - q.y);
+          if (g && g.length > 2 && Math.hypot(g[g.length - 1][0] - p.x, g[g.length - 1][1] - p.y) < 1.0) { let L = 0; for (let k = 1; k < g.length; k++) L += Math.hypot(g[k][0] - g[k - 1][0], g[k][1] - g[k - 1][1]); if (L < straight * 6 + 40) for (let k = 1; k < g.length - 1; k++) walkPts.push({ x: g[k][0], y: g[k][1], l: -1, lv: -1, grid: 1 }); }
+        }
+        // 地上どうしの線が出口の階段（坂）の上を横切るときは、階段の口の 2 m 先を回る（階段室の横の壁に当たった）
+        if (q && p.l === 1 && q.l === 1 && data.ramps) {
+          for (const r of data.ramps) {
+            if (!r.exit) continue;
+            const L = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]) || 1, ux = (r.b[0] - r.a[0]) / L, uy = (r.b[1] - r.a[1]) / L, hw = r.w / 2 + 0.6;
+            const inR = (x, y) => { const al = (x - r.a[0]) * ux + (y - r.a[1]) * uy, sd = Math.abs((x - r.a[0]) * -uy + (y - r.a[1]) * ux); return al > -0.5 && al < L + 0.3 && sd < hw; };
+            const n = Math.ceil(Math.hypot(p.x - q.x, p.y - q.y) / 0.3); let hit = false;
+            for (let k = 1; k < n && !hit; k++) { const u = k / n; if (inR(q.x + (p.x - q.x) * u, q.y + (p.y - q.y) * u)) hit = true; }
+            if (hit && !inR(p.x, p.y) && !inR(q.x, q.y)) { // 階段の口の先の角（q の側 → p の側）を回る
+              const side = (x, y) => Math.sign((x - r.a[0]) * -uy + (y - r.a[1]) * ux) || 1, sq = side(q.x, q.y), sp = side(p.x, p.y), off = hw + 0.8;
+              const K = (sg) => ({ x: r.b[0] + ux * 2.0 + -uy * off * sg, y: r.b[1] + uy * 2.0 + ux * off * sg, l: 1, lv: 0, around: 1 });
+              const onFloor = (k) => phys.surfacesAt(k.x, k.y).some((z) => z > 31 && z < 36);
+              const pick = (sg) => { for (const o of [hw + 0.8, hw + 0.4, hw + 1.5]) { const k = { x: r.b[0] + ux * 2.0 + -uy * o * sg, y: r.b[1] + uy * 2.0 + ux * o * sg, l: 1, lv: 0, around: 1 }; if (onFloor(k)) return k; } const c0 = { x: r.b[0] + ux * 2.5, y: r.b[1] + uy * 2.5, l: 1, lv: 0, around: 1 }; return onFloor(c0) ? c0 : null; };
+              const k1 = pick(sq), k2 = sp !== sq ? pick(sp) : null; if (k1) walkPts.push(k1); if (k2 && (!k1 || Math.hypot(k2.x - k1.x, k2.y - k1.y) > 0.5)) walkPts.push(k2);
+              break;
+            }
+          }
+        }
+        map[i] = walkPts.length; walkPts.push(p); prev = p;
+      });
+      cur.walk = walkPts;
       const end = walkPts[walkPts.length - 1];
       // 手順ごとの、立体の道筋の上の位置（道のりの長さ）。地上の手順は -Infinity（通り過ぎた扱い）
       const ids = [r.E[0].a, ...r.E.map((e) => e.b)].slice(first);
       const cum = [0]; for (let i = 1; i < walkPts.length; i++) cum.push(cum[i - 1] + Math.hypot(walkPts[i].x - walkPts[i - 1].x, walkPts[i].y - walkPts[i - 1].y));
-      const walkIdx = new Map(); ids.forEach((ni, k) => { if (!walkIdx.has(ni)) walkIdx.set(ni, k); });
+      const walkIdx = new Map(); ids.forEach((ni, k) => { if (!walkIdx.has(ni) && map[k] != null) walkIdx.set(ni, map[k]); });
       const stepS = r.steps.map((st, k) => { if (st.seg && st.seg.kind === 'vert' && !canWalk(st.seg.from)) return -Infinity; const ni = stepNode(st, k); const wi = walkIdx.get(ni); return wi == null ? -Infinity : cum[Math.min(wi, cum.length - 1)]; }); // 地上から下りてくる上り下りは、立体に立った時点で済んでいる
       stepS[stepS.length - 1] = cum[cum.length - 1];
       cur.stepS = stepS; cur.cum = cum;

@@ -2,17 +2,17 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvulnach';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvulnach';
-import { addTrains } from './trains.js?v=mvulnach';
-import { routeSteps, stepLine } from './steps.js?v=mvulnach';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvunw8eo';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvunw8eo';
+import { addTrains } from './trains.js?v=mvunw8eo';
+import { routeSteps, stepLine } from './steps.js?v=mvunw8eo';
 import { initMeet } from './meet.js';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvulnach'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvunw8eo'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -429,11 +429,24 @@ function getGrid() {
   }
   // マスごとの床の高さ（地下 1 階に近い面）
   const W = Math.ceil((x1 - x0) / C) + 1, H = Math.ceil((y1 - y0) / C) + 1, ok = new Uint8Array(W * H), zc = new Float32Array(W * H);
+  const multi = new Map(); // 床が 2 枚以上重なるます → 高さの一覧
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
     const zs = phys.surfacesAt(x0 + (i + 0.5) * C, y0 + (j + 0.5) * C).filter((z) => z > lo && z < hi);
     if (!zs.length) continue;
     ok[j * W + i] = 1;
     zc[j * W + i] = zs.reduce((b, v) => (Math.abs(v - z0) < Math.abs(b - z0) ? v : b));
+    if (zs.length >= 3) { const o = zs.slice().sort((p, q) => p - q); zc[j * W + i] = o[Math.floor(o.length / 2)]; } // 3 枚以上重なる（下の床・坂・上の床）なら真ん中の坂
+    else if (zs.length > 1 && Math.max(...zs) - Math.min(...zs) > 0.3) multi.set(j * W + i, zs);
+  }
+  // 重なるますは、となりのますの高さの平均にいちばん近い床を選び直す（3 回）。坂の下に JR の床が続いている所で、基準に近い下の床を選んで
+  // 坂の途中に 1.1 m の段差ができ、東側の通路がつながっていないとみなされた（池袋の (69,-45)。2026-10-30）
+  // となりとの段差（いちばん大きいもの）がいちばん小さくなる床を選ぶ。8 回くり返して、坂の上の床が順に選ばれるように
+  for (let it = 0; it < 8; it++) for (const [c, zs] of multi) {
+    const i = c % W, j = (c - i) / W, nb = [];
+    for (const [di, dj] of [[1, 0], [-1, 0], [0, 1], [0, -1]]) { const ii = i + di, jj = j + dj; if (ii < 0 || jj < 0 || ii >= W || jj >= H) continue; const nc = jj * W + ii; if (ok[nc]) nb.push(zc[nc]); }
+    if (!nb.length) continue;
+    const cost = (v) => nb.reduce((s2, z) => s2 + Math.min(1.5, Math.abs(z - v)), 0);
+    zc[c] = zs.reduce((b, v) => (cost(v) < cost(b) - 1e-6 ? v : b), zc[c]);
   }
   // 壁: そのマスの床から、すね〜頭（0.3〜1.75 m。当たり判定と同じ）の高さにかかればふさぐ
   const mark = (x, y, za, zb) => {
