@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>エキさんぽ</title>
 <meta name="description" content="JR の駅（池袋・東京・新宿・渋谷・品川・高輪ゲートウェイ）と地下街を、人の目線で自由に歩き回れる立体の構内図">
-<link rel="stylesheet" href="src/style.css?v=mvudsybk">
+<link rel="stylesheet" href="src/style.css?v=mvue7qwp">
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
@@ -23,6 +23,7 @@
 
 <div id="leftBtns">
   <button id="destBtn" class="btn primary" type="button">出発・行き先</button>
+  <button id="meetBtn" class="btn" type="button">待ち合わせ</button>
   <button id="recBtn" class="btn" type="button"><span class="recDot"></span><span id="recLabel">録画</span></button>
   <button id="lostBtn" class="btn" type="button">迷ったら</button>
 </div>
@@ -137,6 +138,24 @@
   </div>
 </div>
 
+<div id="meetPanel" hidden>
+  <div class="sheet">
+    <div class="head"><b>待ち合わせ案内</b><button id="meetClose" class="x" type="button" aria-label="閉じる">✕</button></div>
+    <div class="meetForm">
+      <label>出発<select id="meetFrom"></select></label>
+      <label>待ち合わせ場所<input id="meetQ" type="search" placeholder="名前で探す" autocomplete="off"><select id="meetTo" size="4"></select></label>
+      <div class="row"><select id="meetPr"><option value="std">標準</option><option value="stair">階段を使う</option><option value="esc">エスカレーターを使う</option><option value="ev">エレベーター（段差なし）</option></select><button id="meetGo" class="btn primary" type="button">案内</button></div>
+    </div>
+    <div id="meetTitle"></div>
+    <p id="meetSum" class="note"></p>
+    <canvas id="meetMap"></canvas>
+    <ol id="meetSteps"></ol>
+    <div class="row">
+      <button id="meetWalk" class="btn primary" type="button" disabled>立体で歩く</button>
+      <button id="meetShare" class="btn" type="button">あいてに送る</button>
+    </div>
+  </div>
+</div>
 <div id="destPanel" hidden>
   <div class="sheet">
     <div class="head">
@@ -171,7 +190,7 @@
       <li>壁や改札機にはぶつかります。改札機のあいだを通り抜けてください</li>
     </ul>
     <p id="helpCredit" class="note"></p>
-    <p class="note"><a href="manual.html" target="_blank" rel="noopener">使い方（録画と共有・URL・データ）</a>　版: <span id="appVer">10/30 11:57（mvudsybk）</span></p>
+    <p class="note"><a href="manual.html" target="_blank" rel="noopener">使い方（録画と共有・URL・データ）</a>　版: <span id="appVer">10/30 12:08（mvue7qwp）</span></p>
     <button id="helpOk" class="btn primary" type="button">歩きはじめる</button>
   </div>
 </div>
@@ -179,6 +198,6 @@
 <footer id="credit"></footer>
 <div id="loading">読み込み中…</div>
 
-<script type="module" src="src/app.js?v=mvudsybk"></script>
+<script type="module" src="src/app.js?v=mvue7qwp"></script>
 </body>
 </html>

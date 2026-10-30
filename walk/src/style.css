@@ -207,3 +207,22 @@ body.touch .pc, body:not(.touch) .touch { display: none; }
 .btn.wide { display: block; width: 100%; margin-top: 8px; }
 .destHint { background: #fff4e0; color: #7a4600; border-radius: 8px; padding: 8px 10px; margin: 4px 0 6px; }
 #destPanel.where #routeRows, #destPanel.where #goBtn { display: none; }
+
+/* 待ち合わせ案内（統合データ）。道順のパネルと同じ見た目 */
+#meetPanel { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: grid; place-items: end center; z-index: 10; }
+#meetPanel[hidden] { display: none; }
+#meetPanel .sheet { display: flex; flex-direction: column; max-height: 92vh; }
+#meetPanel .sheet > :not(#meetSteps) { flex: none; }
+.meetForm label { display: block; font-size: 12px; color: var(--sub); margin: 4px 0; }
+.meetForm select, .meetForm input { display: block; width: 100%; box-sizing: border-box; margin-top: 2px; padding: 6px 8px; font-size: 14px; border: 1px solid var(--line); border-radius: 8px; background: #fff; color: inherit; }
+.meetForm .row { display: flex; gap: 8px; align-items: center; margin-top: 6px; }
+.meetForm .row select { flex: 1; margin: 0; }
+#meetTitle { font-weight: 700; margin-top: 6px; }
+#meetMap { width: 100%; height: 150px; border-radius: 10px; background: #f4f2ee; }
+#meetSteps { list-style: none; margin: 8px 0; padding: 0; overflow: auto; flex: 1; min-height: 80px; }
+#meetSteps li button { display: flex; align-items: flex-start; gap: 10px; width: 100%; text-align: left; border: none; background: transparent; padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: 14px; color: inherit; }
+#meetSteps li.here button { background: #fff7d6; }
+#meetSteps .no { flex: none; width: 24px; height: 24px; border-radius: 50%; background: #f08c00; color: #fff; font-size: 13px; font-weight: 800; display: grid; place-items: center; }
+#meetSteps .no.s { background: #0b8f4d; } #meetSteps .no.g { background: #e8453c; }
+#meetSteps .d { color: var(--sub); font-size: 12px; line-height: 1.4; }
+#meetSteps > li > button > small:last-child { color: var(--sub); font-size: 11px; margin-left: auto; white-space: nowrap; border: 1px solid var(--line); border-radius: 8px; padding: 1px 6px; }

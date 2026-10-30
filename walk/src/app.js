@@ -2,16 +2,17 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvudsybk';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvudsybk';
-import { addTrains } from './trains.js?v=mvudsybk';
-import { routeSteps, stepLine } from './steps.js?v=mvudsybk';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvue7qwp';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvue7qwp';
+import { addTrains } from './trains.js?v=mvue7qwp';
+import { routeSteps, stepLine } from './steps.js?v=mvue7qwp';
+import { initMeet } from './meet.js';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvudsybk'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvue7qwp'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -904,7 +905,7 @@ chevs.renderOrder = 3;
 chevs.frustumCulled = false; // 矢印の置き場所は案内のたびに変わるので、範囲で間引かない
 scene.add(chevs);
 
-const nav = { dest: null, pts: null, steps: null, at: null, lastCalc: 0, arrived: false };
+const nav = { dest: null, pts: null, steps: null, at: null, lastCalc: 0, arrived: false, fixed: null }; // fixed: 待ち合わせ案内の道筋（統合データ。探し直さない）
 // 行き先の光の柱: 案内の行き先・足あとの終わりの床から天井まで。脈打たせて遠くから分かるように。同じ階で 4 m より遠いときは壁越しにも薄く見せる
 const beacon = new THREE.Group();
 {
@@ -970,6 +971,7 @@ function drawChevrons() {
 new ResizeObserver(() => { const g = $('guide'); if (!g.hidden) document.body.style.setProperty('--guideB', `${Math.round(g.getBoundingClientRect().bottom)}px`); }).observe($('guide'));
 function setDest(d) {
   nav.dest = d; nav.arrived = false; nav.lastCalc = 0; nav.at = null;
+  if (!d || !d.meet) nav.fixed = null;
   $('guide').hidden = !d;
   if (!d) { nav.pts = null; drawChevrons(); return; }
   $('gName').textContent = d.name + (d.t === 'toilet' ? `（${LV[d.level].name}）` : d.dir ? ` ${d.dir}` : '') + (d.near ? '（近くの通路まで）' : '');
@@ -977,7 +979,7 @@ function setDest(d) {
 }
 function recalc() {
   const pl = levelOf(me.z);
-  nav.pts = findRoute(me.x, me.y, pl, nav.dest);
+  nav.pts = nav.fixed ? nav.fixed.pts : findRoute(me.x, me.y, pl, nav.dest);
   nav.steps = nav.pts && nav.pts.length > 1 ? routeSteps(nav.pts, stepHelp, { dest: nav.dest.name }) : null;
   if (!nav.pts) { $('gDist').textContent = 'ここからの道が見つかりません'; $('gHint').textContent = 'データの上で通路がつながっていません'; }
   nav.at = { x: me.x, y: me.y, l: pl };
@@ -1004,7 +1006,7 @@ function updateGuide() {
   const now = performance.now();
   const pl = levelOf(me.z);
   const pr = progress();
-  if (now - nav.lastCalc > 1000 && (pr.d > 5 || nav.at.l !== pl || Math.hypot(me.x - nav.at.x, me.y - nav.at.y) > 25)) { recalc(); return updateGuide(); }
+  if (!nav.fixed && now - nav.lastCalc > 1000 && (pr.d > 5 || nav.at.l !== pl || Math.hypot(me.x - nav.at.x, me.y - nav.at.y) > 25)) { recalc(); return updateGuide(); }
   const pts = nav.pts;
   // 先の長さと、4 m 先の点
   let remain = 0, look = null, acc = 0;
@@ -1863,6 +1865,9 @@ if (!replaying) {
   if (to) setDest(to);
   if (from && to && nav.pts) { const p = nav.pts.find((t, i) => i > 0 && Math.hypot(t.x - me.x, t.y - me.y) > 3); if (p) me.yaw = Math.atan2(p.x - me.x, p.y - me.y); }
 }
+
+// ---------- 待ち合わせ案内（統合データ。図と手順 + 立体） ----------
+const meet = await initMeet({ $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, setMeetRoute: (r) => { nav.fixed = r; setDest(r); }, clearRoute: () => setDest(null) });
 
 // ---------- はじめの説明 ----------
 const seen = (() => { try { return localStorage.getItem('ekisanpo.help') === '1'; } catch { return false; } })();

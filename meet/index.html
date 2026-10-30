@@ -61,8 +61,8 @@
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module">
-import { Guide, lvName } from './guide.js?v=mvudsybk';
-const DATA = ['../data/meet.json?v=mvudsybk', '../data/meet.json?v=mvudsybk'];
+import { Guide, lvName } from './guide.js?v=mvue7qwp';
+const DATA = ['../data/meet.json?v=mvue7qwp', '../data/meet.json?v=mvue7qwp'];
 const ORIGIN = { lat: 35.7295, lon: 139.7109 };
 const a = 6378137, e2 = 0.00669438002290, phi = ORIGIN.lat * Math.PI / 180, w = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
 const KX = (Math.PI / 180) * (a / w) * Math.cos(phi), KY = (Math.PI / 180) * ((a * (1 - e2)) / w ** 3);
@@ -113,9 +113,7 @@ function renderResult() {
   if (ex.length) h += `<h2>待ち合わせ場所に近い出口</h2><div class="exits">${ex.map((x) => `<button class="s" data-exit="exit:${x.e.name}">${x.e.name}（約${Math.max(1, Math.round(x.d / 60))}分）</button>`).join('')}</div>`;
   const u = new URL(location.href); u.searchParams.set('from', r.from.id); u.searchParams.set('to', r.to.id); u.searchParams.set('pr', pr);
   h += `<h2>あいてに送る</h2><div class="share">${u.href}</div><div class="row" style="margin-top:4px"><button class="s" id="copy">リンクをコピー</button><button class="s" id="copyText">案内文をコピー</button></div>`;
-  const wname = (it) => (D.walkDest.includes(it.name) ? it.name : it.type === 'spot' && D.walkDest.includes(it.name.replace(/^JR /, '').replace(/の前$/, '')) ? it.name.replace(/^JR /, '').replace(/の前$/, '') : null);
-  const wf = wname(r.from), wt = wname(r.to);
-  if (wt) h += `<h2>立体で歩く</h2><div class="small"><a href="../walk/?st=ikebukuro&to=${encodeURIComponent(wt)}${wf ? '&from=' + encodeURIComponent(wf) : ''}" target="_blank" rel="noopener">人の目線で「${wt}」まで歩く（別の画面）</a>${wf ? '' : '。出発は駅の中の改札からになります（地上の場所・出口は歩く画面にありません）'}</div>`;
+  h += `<h2>立体で歩く</h2><div class="small"><a href="../walk/?st=ikebukuro&mfrom=${encodeURIComponent(r.from.id)}&mto=${encodeURIComponent(r.to.id)}&pr=${pr}" target="_blank" rel="noopener">同じ道を人の目線で歩く（歩く画面。地上の区間は図で、駅・地下街に入ってから立体）</a></div>`;
   $('result').innerHTML = h;
   $('result').querySelectorAll('li').forEach((li) => (li.onclick = () => selectStep(+li.dataset.i)));
   $('result').querySelectorAll('[data-exit]').forEach((b) => (b.onclick = () => { $('from').value = b.dataset.exit; run(); }));

@@ -1,0 +1,132 @@
+// 待ち合わせ案内を歩く画面に組み込む。経路は統合データ（data/meet.json）と guide.js で 1 回だけ作り、
+// 同じ経路を「図と手順」（この画面のパネル）と「立体」（床の矢印・案内カード）の両方で見せる。手順を押すとその場所へ立体で飛ぶ。
+// 地上の区間はまだ立体に床が無いので、図と手順だけで案内し、立体は駅・地下街に入る所から歩く。
+
+import { Guide, lvName } from './guide.js';
+
+export async function initMeet(A) {
+  const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, setMeetRoute, clearRoute } = A;
+  let D;
+  try { D = await fetch(`data/meet.json${VER}`).then((r) => r.json()); } catch { return; }
+  const G = new Guide(D);
+  const N = (i) => D.nodes[i];
+  // 統合データの階 → この画面の階（JR の数え方: 1F が 1）。地下 2 階以下は床が無い
+  const WL = (lv) => (lv === 0 ? 1 : lv === 1 ? 2 : lv === -1 ? -1 : null);
+  const fromList = [...D.places.map((p) => ({ ...p, type: 'place', id: 'place:' + p.name })), ...D.exits.map((e) => ({ ...e, type: 'exit', id: 'exit:' + e.name })), ...D.spots.map((s) => ({ ...s, type: 'spot', id: 'spot:' + s.key }))];
+  const spots = D.spots.map((s) => ({ ...s, type: 'spot', id: 'spot:' + s.key }));
+  const find = (id) => fromList.find((x) => x.id === id) || spots.find((x) => x.id === id);
+  let cur = null; // { from, to, pr, r, pts, walkFrom }
+
+  // ---- 画面
+  const fromSel = $('meetFrom'), toSel = $('meetTo'), prSel = $('meetPr');
+  const grp = (sel, label, items, fmt) => { const g = document.createElement('optgroup'); g.label = label; for (const it of items) { const o = document.createElement('option'); o.value = it.id; o.textContent = fmt(it); g.appendChild(o); } sel.appendChild(g); };
+  grp(fromSel, '地上の場所', fromList.filter((x) => x.type === 'place'), (x) => x.name);
+  grp(fromSel, '出口の前（地上）', fromList.filter((x) => x.type === 'exit'), (x) => x.name);
+  grp(fromSel, '待ち合わせ場所', fromList.filter((x) => x.type === 'spot'), (x) => `${x.name}（${lvName(x.level)}）`);
+  const fillTo = (q = '') => { const keep = toSel.value; toSel.innerHTML = ''; let last = null; for (const s of spots) { if (q && !s.name.includes(q) && !s.kind.includes(q)) continue; if (s.kind !== last) { last = s.kind; } const o = document.createElement('option'); o.value = s.id; o.textContent = `［${s.kind}］${s.name}（${lvName(s.level)}）`; toSel.appendChild(o); } if (keep && [...toSel.options].some((o) => o.value === keep)) toSel.value = keep; };
+  fillTo();
+  $('meetQ').oninput = () => fillTo($('meetQ').value.trim());
+  $('meetBtn').onclick = () => { $('meetPanel').hidden = false; if (cur) render(); };
+  $('meetClose').onclick = () => { $('meetPanel').hidden = true; };
+  $('meetPanel').onclick = (e) => { if (e.target === $('meetPanel')) $('meetPanel').hidden = true; };
+  $('meetGo').onclick = () => run();
+  toSel.onchange = () => run();
+  $('meetWalk').onclick = () => { if (cur) walkFrom(cur.walkFrom); };
+  $('meetShare').onclick = async () => {
+    if (!cur) return;
+    const url = shareURL();
+    if (navigator.share) { try { await navigator.share({ title: '池袋 待ち合わせ案内', text: `${cur.from.name} → ${cur.to.name}（約${Math.max(1, Math.round(cur.r.total / 60))}分）`, url }); return; } catch { /* 取り消し */ } }
+    try { await navigator.clipboard.writeText(url); toast('リンクをコピーしました'); } catch { toast(url); }
+  };
+  const shareURL = () => { const u = new URL(location.href); u.hash = ''; u.searchParams.delete('from'); u.searchParams.delete('to'); u.searchParams.set('mfrom', cur.from.id); u.searchParams.set('mto', cur.to.id); u.searchParams.set('pr', cur.pr); return u.href; };
+
+  // ---- 経路 → 立体の道筋。地上（国交省の歩道）の点は歩けないので、駅・地下街に入って床のある最初の点から
+  function toPts(E) {
+    const ids = [E[0].a, ...E.map((e) => e.b)];
+    const pts = ids.map((i, k) => { const n = N(i); const l = WL(n[2]); const e = k ? E[k - 1] : null; return { x: n[0], y: n[1], l: l ?? -1, lv: n[2], mode: e ? (e.mode === 2 ? 2 : e.mode === 4 ? 4 : e.mode === 5 ? 5 : undefined) : undefined, ground: n[6] === 'mlit' || l == null || (n[2] >= 0 && n[6] !== 'jr') }; }); // ground: 階 0 以上は JR の点（ホーム・コンコース）だけ歩ける。地上の歩道・OSM の出入口の点には床が無い
+    let first = -1;
+    for (let k = 0; k < pts.length; k++) { const p = pts[k]; if (p.ground) continue; if (landingAt(p.x, p.y, p.l, true)) { first = k; break; } }
+    return { pts, first };
+  }
+  function run(fromId = fromSel.value, toId = toSel.value, pr = prSel.value) {
+    const from = find(fromId), to = find(toId);
+    if (!from || !to) return;
+    const r = G.route(from, to, pr);
+    if (!r) { $('meetSum').textContent = 'この条件では道が見つかりません。' + (pr === 'ev' ? '条件を「標準」にすると出ます。' : ''); $('meetSteps').innerHTML = ''; return; }
+    const { pts, first } = toPts(r.E);
+    cur = { from, to, pr, r, pts, walkFrom: first };
+    const u = new URL(location.href); u.searchParams.set('mfrom', from.id); u.searchParams.set('mto', to.id); u.searchParams.set('pr', pr); history.replaceState(null, '', u);
+    // 立体の案内: 床のある部分の道筋を固定の経路として渡す
+    if (first >= 0) {
+      const walk = pts.slice(first).filter((p) => !p.ground);
+      const end = walk[walk.length - 1];
+      setMeetRoute({ name: to.name, x: end.x, y: end.y, level: end.l, pts: walk, all: pts, meet: true });
+    } else clearRoute();
+    render();
+  }
+  // 手順の点（この手順が始まる統合データの点）
+  const canWalk = (ni) => { const n = N(ni); const l = WL(n[2]); return l != null && n[6] !== 'mlit' && !(n[2] >= 0 && n[6] !== 'jr') && !!landingAt(n[0], n[1], l, true); };
+  const stepNode = (s, k) => (s.seg ? (s.seg.kind === 'vert' && !canWalk(s.seg.from) && canWalk(s.seg.to) ? s.seg.to : s.seg.from) : k === 0 ? cur.r.from.node : cur.r.goal);
+  function walkFrom(k) {
+    if (k == null || k < 0) { toast('この道は地上の区間だけなので、立体では歩けません（図で案内します）'); return; }
+    const p = cur.pts[k];
+    $('meetPanel').hidden = true;
+    jumpTo(p.x, p.y, p.l, true);
+  }
+  function render() {
+    const r = cur.r, min = Math.max(1, Math.round(r.total / 60)), stairs = r.counts[2] || 0, esc = r.counts[4] || 0, ev = r.counts[5] || 0;
+    const len = r.E.reduce((t, e) => t + e.len, 0);
+    $('meetTitle').textContent = `${cur.from.name} → ${cur.to.name}`;
+    $('meetSum').textContent = `約${min}分・道のり約${Math.round(len / 10) * 10}m（地下 約${Math.round(r.underLen / 10) * 10}m）・${stairs ? `階段 ${stairs}回` : '階段なし'}${esc ? `・エスカレーター ${esc}回` : ''}${ev ? `・エレベーター ${ev}回` : ''}` + (cur.walkFrom > 0 ? '。地上の区間は図で案内し、駅・地下街に入ってから立体で歩けます' : cur.walkFrom < 0 ? '。この道は立体では歩けません（地上だけ）' : '');
+    const ol = $('meetSteps'); ol.innerHTML = '';
+    // いまいる所に近い手順を強調（同じ階で、手順の始まりの点から 15 m 以内）
+    const pl = levelOf(me.z);
+    let nearK = -1, nd = 15;
+    r.steps.forEach((s, k) => { const ni = stepNode(s, k), n = N(ni); if (WL(n[2]) !== pl) return; const d = Math.hypot(n[0] - me.x, n[1] - me.y); if (d < nd) { nd = d; nearK = k; } });
+    r.steps.forEach((s, k) => {
+      const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button';
+      const ni = stepNode(s, k), walk = canWalk(ni);
+      const cls = s.icon === 'start' ? 's' : s.icon === 'goal' ? 'g' : '';
+      b.innerHTML = `<span class="no ${cls}">${s.icon === 'start' ? '出' : s.icon === 'goal' ? '着' : k}</span><span><span class="t"></span>${s.detail ? `<br><small class="d"></small>` : ''}</span><small>${walk ? '立体' : '図'}</small>`;
+      b.querySelector('.t').textContent = s.title; if (s.detail) b.querySelector('.d').textContent = s.detail;
+      if (k === nearK) li.classList.add('here');
+      b.onclick = () => { if (!walk) { toast('ここは地上の区間です（立体には床がありません）。地図と文で案内します'); return; } const n = N(ni); $('meetPanel').hidden = true; jumpTo(n[0], n[1], WL(n[2]), true); };
+      li.append(b); ol.append(li);
+    });
+    $('meetWalk').disabled = cur.walkFrom < 0;
+    requestAnimationFrame(drawMap);
+  }
+  // 図: 通る階の床（上が北）と道筋。地上の区間は灰色、立体で歩ける区間は橙
+  function drawMap() {
+    const cv = $('meetMap'), W = cv.clientWidth, H = cv.clientHeight, dpr = devicePixelRatio || 1;
+    if (!W || !cur) return;
+    cv.width = W * dpr; cv.height = H * dpr;
+    const g = cv.getContext('2d'), P = cur.pts;
+    let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
+    for (const p of P) { x0 = Math.min(x0, p.x); x1 = Math.max(x1, p.x); y0 = Math.min(y0, p.y); y1 = Math.max(y1, p.y); }
+    const pad = 14, k = Math.min((W - 2 * pad) / Math.max(20, x1 - x0), (H - 2 * pad) / Math.max(20, y1 - y0));
+    const cx = (x0 + x1) / 2, cy = (y0 + y1) / 2, X = (x) => W / 2 + (x - cx) * k, Y = (y) => H / 2 - (y - cy) * k;
+    g.setTransform(dpr, 0, 0, dpr, 0, 0);
+    g.fillStyle = '#f4f2ee'; g.fillRect(0, 0, W, H);
+    const levels = new Set(P.filter((p) => !p.ground).map((p) => p.l));
+    g.fillStyle = 'rgba(255,255,255,0.85)'; g.strokeStyle = '#cfc8bb'; g.lineWidth = 0.8;
+    for (const f of data.floors) { if (!levels.has(f.l)) continue; g.beginPath(); for (const r of f.r) { for (let i = 0; i < r.length; i += 2) (i ? g.lineTo : g.moveTo).call(g, X(r[i]), Y(r[i + 1])); g.closePath(); } g.fill('evenodd'); g.stroke(); }
+    g.lineJoin = 'round'; g.lineCap = 'round';
+    for (let i = 1; i < P.length; i++) { const a = P[i - 1], b = P[i]; g.strokeStyle = a.ground || b.ground ? '#8a8a8a' : '#f08c00'; g.lineWidth = a.ground || b.ground ? 3 : 4; g.beginPath(); g.moveTo(X(a.x), Y(a.y)); g.lineTo(X(b.x), Y(b.y)); g.stroke(); }
+    g.font = 'bold 11px system-ui, sans-serif'; g.textAlign = 'center'; g.textBaseline = 'middle';
+    cur.r.steps.forEach((s, i) => { const n = N(stepNode(s, i)), x = X(n[0]), y = Y(n[1]); g.fillStyle = s.icon === 'start' ? '#0b8f4d' : s.icon === 'goal' ? '#e8453c' : '#f08c00'; g.beginPath(); g.arc(x, y, 9, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke(); g.fillStyle = '#fff'; g.fillText(s.icon === 'start' ? '出' : s.icon === 'goal' ? '着' : String(i), x, y + 0.5); });
+    // いまいる所
+    g.fillStyle = '#1a73e8'; g.beginPath(); g.arc(X(me.x), Y(me.y), 5, 0, Math.PI * 2); g.fill(); g.strokeStyle = '#fff'; g.lineWidth = 2; g.stroke();
+  }
+  // URL から: ?mfrom=&mto=&pr=（待ち合わせ案内の共有リンク、meet/ の「立体で歩く」）
+  const q = new URLSearchParams(location.search);
+  if (q.get('mto')) {
+    if (q.get('mfrom')) fromSel.value = q.get('mfrom');
+    toSel.value = q.get('mto');
+    if (q.get('pr')) prSel.value = q.get('pr');
+    run(fromSel.value, toSel.value, prSel.value);
+    if (cur && cur.walkFrom >= 0) { const p = cur.pts[cur.walkFrom]; jumpTo(p.x, p.y, p.l, true); }
+    $('meetPanel').hidden = false;
+  }
+  return { run, render, get cur() { return cur; } };
+}
