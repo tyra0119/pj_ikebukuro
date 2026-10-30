@@ -1,0 +1,232 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>池袋 重ね合わせ確認</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; font-size: 13px; }
+  #map { position: absolute; inset: 0; right: 320px; background: #f4f4f2; }
+  #side { position: absolute; top: 0; right: 0; bottom: 0; width: 320px; overflow: auto; background: #fff; border-left: 1px solid #ddd; padding: 10px 12px; box-sizing: border-box; }
+  h1 { font-size: 15px; margin: 0 0 6px; }
+  h2 { font-size: 13px; margin: 12px 0 4px; border-bottom: 1px solid #eee; }
+  .levels button { margin: 0 2px 4px 0; padding: 3px 8px; border: 1px solid #bbb; background: #fafafa; border-radius: 4px; cursor: pointer; }
+  .levels button.on { background: #2b6cb0; color: #fff; border-color: #2b6cb0; }
+  label.layer { display: flex; align-items: center; gap: 6px; padding: 2px 0; cursor: pointer; }
+  .sw { display: inline-block; width: 18px; height: 10px; border-radius: 2px; border: 1px solid rgba(0,0,0,.2); }
+  .issue { padding: 4px 6px; border-left: 3px solid #999; margin: 3px 0; background: #fafafa; cursor: pointer; }
+  .issue:hover { background: #eef4ff; }
+  .issue.sel { background: #fff3cd; }
+  .issue small { color: #666; }
+  #info { white-space: pre-wrap; background: #f7f7f7; padding: 6px; border-radius: 4px; max-height: 220px; overflow: auto; font-size: 12px; }
+  .kinds button { margin: 0 2px 3px 0; padding: 2px 6px; border: 1px solid #ccc; border-radius: 10px; background: #fff; cursor: pointer; font-size: 12px; }
+  .kinds button.on { background: #444; color: #fff; }
+  .stats { font-size: 12px; color: #333; line-height: 1.5; }
+  .leaflet-popup-content { font-size: 12px; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+<div id="side">
+  <h1>池袋 4 データの重ね合わせ</h1>
+  <div class="stats" id="stats">読み込み中…</div>
+  <h2>階</h2>
+  <div class="levels" id="levels"></div>
+  <h2>表示するもの</h2>
+  <div id="layers"></div>
+  <h2>指摘 <span id="issueCount"></span></h2>
+  <div class="kinds" id="kinds"></div>
+  <div id="issues"></div>
+  <h2>選んだもの</h2>
+  <div id="info">地図の線や点をクリック</div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const ORIGIN = { lat: 35.7295, lon: 139.7109 };
+const a = 6378137, e2 = 0.00669438002290, phi = ORIGIN.lat * Math.PI / 180, w = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
+const KX = (Math.PI / 180) * (a / w) * Math.cos(phi), KY = (Math.PI / 180) * ((a * (1 - e2)) / w ** 3);
+const LL = (x, y) => [ORIGIN.lat + y / KY, ORIGIN.lon + x / KX];
+
+const SRC = { jr: ['JR東日本', '#d62728'], osm: ['OpenStreetMap', '#1f77b4'], mlit: ['国交省（地上）', '#2ca02c'], merge: ['接続（補正で足した）', '#ff7f0e'] };
+const MODE_DASH = { stairs: '6 4', escalator: '2 4', elevator: '1 3', gate: '10 3 2 3', platform: '12 6', connector: '4 3', crossing: '3 3' };
+const MODE_JA = { walk: '通路', stairs: '階段', escalator: 'エスカレーター', elevator: 'エレベーター', gate: '改札', platform: 'ホーム', ramp: 'スロープ', crossing: '横断歩道', connector: '接続' };
+const KIND_JA = { w: '通路・コンコース', s: '階段', e: 'エスカレーター', v: 'エレベーター', r: 'スロープ', t: 'トイレなど', o: 'ホーム（屋外）' };
+
+const map = L.map('map', { preferCanvas: true, zoomControl: true }).setView([ORIGIN.lat, ORIGIN.lon], 17);
+L.control.scale({ imperial: false }).addTo(map);
+const base = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19, opacity: 0.45, attribution: '© OpenStreetMap contributors' }).addTo(map);
+const gsi = L.tileLayer('https://cyberjapandata.gsi.go.jp/xyz/pale/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 18, opacity: 0.45, attribution: '国土地理院' });
+
+let D = null, curLevel = -1, selIssue = null, kindFilter = null;
+const groups = {}; // name -> { layer: L.LayerGroup, on: bool, build: fn }
+const info = document.getElementById('info');
+const show = (txt) => { info.textContent = txt; };
+
+function defGroup(key, label, color, on, build) { groups[key] = { label, color, on, build, layer: L.layerGroup() }; }
+function rebuild() {
+  for (const g of Object.values(groups)) { g.layer.clearLayers(); if (g.on) { g.build(g.layer); if (!map.hasLayer(g.layer)) g.layer.addTo(map); } else if (map.hasLayer(g.layer)) map.removeLayer(g.layer); }
+  renderIssues();
+}
+const levelOK = (lv) => curLevel === 'all' || lv === curLevel || (curLevel === -1 && lv === -0.5) || (curLevel === 0 && lv === 0.5);
+const nodeById = {};
+
+function nodeText(n) {
+  const t = [`${n.id}（${SRC[n.src] ? SRC[n.src][0] : n.src}）`, `階 ${n.level}・標高 ${n.z} m`, n.name ? `名前: ${n.name}` : '', n.kind ? `種類: ${n.kind}` : '', n.platform ? `番線: ${n.platform}` : '', n.moved ? `補正前: (${n.moved[0]}, ${n.moved[1]}) → 今 (${n.x}, ${n.y})` : `位置: (${n.x}, ${n.y})`, n.tags ? 'OSM: ' + Object.entries(n.tags).map(([k, v]) => `${k}=${v}`).join(' ') : ''];
+  return t.filter(Boolean).join('\n');
+}
+function linkText(l) {
+  const A = nodeById[l.a], B = nodeById[l.b];
+  const at = Object.entries(l.attrs || {}).filter(([, v]) => v != null && v !== '').map(([k, v]) => `${k}=${v}`).join(' ');
+  return [`${l.id}（${SRC[l.src] ? SRC[l.src][0] : l.src}）${MODE_JA[l.mode] || l.mode}`, `${l.a}（階 ${A.level}）→ ${l.b}（階 ${B.level}） ${l.len} m`, l.dropped ? `落とした: ${l.dropped}` : '', at].filter(Boolean).join('\n');
+}
+
+function buildLinks(src, g, dropped = false) {
+  for (const l of D.links) {
+    if (l.src !== src || !!l.dropped !== dropped) continue;
+    const A = nodeById[l.a], B = nodeById[l.b];
+    if (!levelOK(A.level) && !levelOK(B.level)) continue;
+    const vert = A.level !== B.level;
+    const pl = L.polyline([LL(A.x, A.y), LL(B.x, B.y)], { color: dropped ? '#999' : SRC[src][1], weight: dropped ? 1.5 : vert ? 3.5 : 2.5, opacity: dropped ? 0.6 : 0.9, dashArray: MODE_DASH[l.mode] });
+    pl.on('click', (e) => { show(linkText(l)); L.DomEvent.stop(e); });
+    pl.addTo(g);
+  }
+}
+function buildNodes(src, g, pred = () => true) {
+  for (const n of D.nodes) {
+    if (n.src !== src || !levelOK(n.level) || !pred(n)) continue;
+    const big = n.kind === 'entrance' || n.kind === 'gate' || n.kind === 'platform';
+    const m = L.circleMarker(LL(n.x, n.y), { radius: big ? 5 : 2.5, color: SRC[src][1], fillColor: n.kind === 'entrance' ? '#fff' : SRC[src][1], fillOpacity: 0.9, weight: big ? 2 : 1 });
+    m.on('click', (e) => { show(nodeText(n)); L.DomEvent.stop(e); });
+    m.addTo(g);
+    if (n.name && big) m.bindTooltip(n.name, { permanent: false, direction: 'top' });
+  }
+}
+
+defGroup('plFloor', 'PLATEAU 地下街の床（B1）', '#c8b89a', true, (g) => {
+  if (!levelOK(-1)) return;
+  D.polygons.plateauFloor.forEach((t, i) => { const z = D.polygons.plateauFloorZ[i]; L.polygon([LL(t[0], t[1]), LL(t[2], t[3]), LL(t[4], t[5])], { stroke: false, fillColor: z < 27 ? '#a99b7d' : '#c8b89a', fillOpacity: 0.55, interactive: false }).addTo(g); });
+});
+defGroup('plWall', 'PLATEAU 壁（B1 の歩く高さ。薄い点線 = JR のコンコースの中で使わない壁）', '#5a4a3a', true, (g) => {
+  if (!levelOK(-1)) return;
+  for (const s of D.polygons.plateauWalls) L.polyline([LL(s[0], s[1]), LL(s[2], s[3])], { color: s[6] === 'jr' ? '#b9a' : '#5a4a3a', weight: s[6] === 'jr' ? 1 : 1.2, opacity: s[6] === 'jr' ? 0.5 : 0.8, dashArray: s[6] === 'jr' ? '2 3' : null, interactive: false }).addTo(g);
+});
+defGroup('plClosure', 'PLATEAU 閉じる面（モデルの境目・壁なし）', '#9b59b6', true, (g) => {
+  if (!levelOK(-1)) return;
+  for (const s of D.polygons.plateauClosure) { const pl = L.polyline([LL(s[0], s[1]), LL(s[2], s[3])], { color: s[6] === 'jr' ? '#d62728' : s[6] === 'osm' ? '#9b59b6' : '#c9a7d9', weight: 2, dashArray: '3 3', opacity: 0.9 }); pl.on('click', (e) => { show(`PLATEAU の閉じる面（モデルの外とつながる境目。壁が無い）\n標高 ${s[4]}〜${s[5]} m\n向こう側: ${s[6] === 'jr' ? 'JR のコンコース' : s[6] === 'osm' ? 'OSM の通路がある（地下街の続き・デパートの地下など）' : 'どのデータにも無い'}`); L.DomEvent.stop(e); }); pl.addTo(g); }
+});
+defGroup('plDoor', 'PLATEAU 扉', '#e67e22', true, (g) => {
+  if (!levelOK(-1)) return;
+  for (const s of D.polygons.plateauDoors) L.polyline([LL(s[0], s[1]), LL(s[2], s[3])], { color: '#e67e22', weight: 4, opacity: 0.9, interactive: false }).addTo(g);
+});
+defGroup('jrSpace', 'JR 構内地図の面', '#f4a6a6', true, (g) => {
+  for (const s of D.polygons.jrSpaces) {
+    if (!levelOK(s.level)) continue;
+    const col = s.kind === 'w' ? '#f4a6a6' : s.kind === 'o' ? '#f9d0d0' : s.kind === 't' ? '#f7cde0' : '#e07070';
+    const p = L.polygon(s.rings.map((r) => r.map(([x, y]) => LL(x, y))), { color: '#c0392b', weight: 0.8, fillColor: col, fillOpacity: s.kind === 'w' || s.kind === 'o' ? 0.35 : 0.6 });
+    p.on('click', (e) => { show(`JR 構内地図の面: ${KIND_JA[s.kind] || s.kind}（${s.cat}）階 ${s.level}`); L.DomEvent.stop(e); });
+    p.addTo(g);
+  }
+});
+defGroup('jrOpen', 'JR 構内地図の開口部（壁の口）', '#8e44ad', true, (g) => {
+  for (const o of D.polygons.jrOpenings) { if (!levelOK(o.level)) continue; const pl = L.polyline(o.pts.map(([x, y]) => LL(x, y)), { color: o.floor === false ? '#c0392b' : o.line === false ? '#f39c12' : '#8e44ad', weight: 4, opacity: 0.9 }); pl.on('click', (e) => { show(`JR 構内地図の開口部 階 ${o.level}\n両側に床: ${o.floor == null ? '-' : o.floor ? 'あり' : '片側に無い（モデルの外・業務用）'}\n2.5 m 以内を通る線: ${o.line == null ? '-' : o.line ? 'あり' : '無し'}`); L.DomEvent.stop(e); }); pl.addTo(g); }
+});
+defGroup('jrGate', 'JR 改札機', '#c0392b', true, (g) => {
+  for (const q of D.polygons.jrGates) { if (!levelOK(q.level)) continue; L.polygon(q.ring.map(([x, y]) => LL(x, y)), { color: '#c0392b', weight: 1, fillColor: '#c0392b', fillOpacity: 0.7, interactive: false }).addTo(g); }
+});
+defGroup('osmArea', 'OSM 地下街の面（ショッピングパーク・ホープセンターなど）', '#aec7e8', true, (g) => {
+  for (const s of D.polygons.osmAreas) { if (!levelOK(s.level)) continue; const p = L.polygon(s.ring.map(([x, y]) => LL(x, y)), { color: '#1f77b4', weight: 1, fillColor: '#aec7e8', fillOpacity: 0.25, dashArray: '4 3' }); p.on('click', (e) => { show(`OSM の面: ${s.name} 階 ${s.level}（way ${s.id}）`); L.DomEvent.stop(e); }); p.addTo(g); }
+});
+defGroup('mlitLink', '国交省 歩道の線', SRC.mlit[1], true, (g) => buildLinks('mlit', g));
+defGroup('mlitNode', '国交省 歩道の点', SRC.mlit[1], false, (g) => buildNodes('mlit', g));
+defGroup('jrLink', 'JR 経路網の線', SRC.jr[1], true, (g) => buildLinks('jr', g));
+defGroup('jrNode', 'JR 経路網の点（白抜き = 出入口）', SRC.jr[1], true, (g) => buildNodes('jr', g));
+defGroup('osmLink', 'OSM 地下通路の線（補正後）', SRC.osm[1], true, (g) => buildLinks('osm', g));
+defGroup('osmNode', 'OSM 地下通路の点（白抜き = 出入口）', SRC.osm[1], true, (g) => buildNodes('osm', g));
+defGroup('moved', 'OSM の補正（補正前 → 後）', '#17becf', true, (g) => {
+  for (const m of D.moved) {
+    const n = nodeById[m.id]; if (!n || !levelOK(n.level)) continue;
+    L.polyline([LL(m.from[0], m.from[1]), LL(m.to[0], m.to[1])], { color: '#17becf', weight: 2, opacity: 0.9, interactive: false }).addTo(g);
+    const c = L.circleMarker(LL(m.from[0], m.from[1]), { radius: 4, color: '#17becf', fillColor: '#fff', fillOpacity: 1, weight: 1.5 });
+    c.on('click', (e) => { show(`補正: ${m.why}\n${m.id}: (${m.from[0]}, ${m.from[1]}) → (${m.to[0]}, ${m.to[1]})`); L.DomEvent.stop(e); });
+    c.addTo(g);
+  }
+});
+defGroup('dropped', '落とした線（JR のコンコースの中の OSM の線など）', '#999', false, (g) => { buildLinks('osm', g, true); buildLinks('jr', g, true); buildLinks('mlit', g, true); });
+defGroup('conn', '接続線（補正で足した）', SRC.merge[1], true, (g) => { buildLinks('merge', g); buildNodes('merge', g); });
+defGroup('issues', '指摘の印', '#000', true, (g) => {
+  for (const it of D.issues) {
+    if (!levelOK(it.level) || (kindFilter && it.kind !== kindFilter)) continue;
+    const col = it.kind.startsWith('壁') ? '#e74c3c' : it.kind === '接続切れ' ? '#8e44ad' : it.kind === '孤立' ? '#2c3e50' : it.kind === '床なし' ? '#d35400' : '#7f8c8d';
+    const m = L.circleMarker(LL(it.x, it.y), { radius: selIssue === it.id ? 9 : 5, color: col, fillColor: selIssue === it.id ? '#ffeb3b' : col, fillOpacity: selIssue === it.id ? 1 : 0.35, weight: 1.5 });
+    m.on('click', (e) => { selectIssue(it, false); L.DomEvent.stop(e); });
+    m.addTo(g);
+  }
+});
+
+function renderLayers() {
+  const el = document.getElementById('layers'); el.innerHTML = '';
+  for (const [k, g] of Object.entries(groups)) {
+    const lab = document.createElement('label'); lab.className = 'layer';
+    lab.innerHTML = `<input type="checkbox" ${g.on ? 'checked' : ''}><span class="sw" style="background:${g.color}"></span>${g.label}`;
+    lab.querySelector('input').onchange = (e) => { g.on = e.target.checked; rebuild(); };
+    el.appendChild(lab);
+  }
+}
+function renderLevels() {
+  const el = document.getElementById('levels'); el.innerHTML = '';
+  for (const [lv, name] of [[1, '2F'], [0, '地上・1F'], [-1, '地下 1 階'], [-2, '地下 2 階'], [-3, '地下 3 階'], [-4, '地下 4 階'], ['all', '全部']]) {
+    const b = document.createElement('button'); b.textContent = name; b.className = curLevel === lv ? 'on' : '';
+    b.onclick = () => { curLevel = lv; renderLevels(); rebuild(); };
+    el.appendChild(b);
+  }
+}
+function selectIssue(it, pan = true) {
+  selIssue = it.id;
+  if (!levelOK(it.level)) { curLevel = it.level; renderLevels(); }
+  if (pan) map.setView(LL(it.x, it.y), Math.max(map.getZoom(), 20));
+  show(`指摘 ${it.id}: ${it.kind}\n${it.msg}\n階 ${it.level}・位置 (${it.x}, ${it.y})${it.link ? '\n線: ' + it.link : ''}`);
+  rebuild();
+}
+function renderIssues() {
+  const el = document.getElementById('issues'); el.innerHTML = '';
+  const list = D.issues.filter((it) => levelOK(it.level) && (!kindFilter || it.kind === kindFilter));
+  document.getElementById('issueCount').textContent = `${list.length} / ${D.issues.length}`;
+  for (const it of list.slice(0, 300)) {
+    const d = document.createElement('div'); d.className = 'issue' + (selIssue === it.id ? ' sel' : '');
+    d.style.borderLeftColor = it.kind.startsWith('壁') ? '#e74c3c' : it.kind === '接続切れ' ? '#8e44ad' : it.kind === '孤立' ? '#2c3e50' : '#7f8c8d';
+    d.innerHTML = `<b>${it.kind}</b> <small>階 ${it.level}</small><br>${it.msg}`;
+    d.onclick = () => selectIssue(it);
+    el.appendChild(d);
+  }
+  if (list.length > 300) { const d = document.createElement('div'); d.textContent = `（ほか ${list.length - 300}）`; el.appendChild(d); }
+  const kd = document.getElementById('kinds'); kd.innerHTML = '';
+  const cnt = {}; for (const it of D.issues) cnt[it.kind] = (cnt[it.kind] || 0) + 1;
+  for (const [k, v] of [['', '全部'], ...Object.keys(cnt).map((k) => [k, `${k} ${cnt[k]}`])]) {
+    const b = document.createElement('button'); b.textContent = v; b.className = (kindFilter || '') === k ? 'on' : '';
+    b.onclick = () => { kindFilter = k || null; rebuild(); };
+    kd.appendChild(b);
+  }
+}
+
+const DATA = ['data/merged.json?v=mvubfnfr'];
+const load = (i) => fetch(DATA[i]).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch((e) => (i + 1 < DATA.length ? load(i + 1) : Promise.reject(e)));
+load(0).then((d) => {
+  D = d;
+  for (const n of D.nodes) nodeById[n.id] = n;
+  const s = D.stats;
+  document.getElementById('stats').innerHTML = [
+    `作成 ${D.built.slice(0, 16).replace('T', ' ')}`,
+    `点 ${D.nodes.length}・線 ${D.links.filter((l) => !l.dropped).length}（落とした ${D.links.filter((l) => l.dropped).length}）`,
+    `JR 構内図 B1 と PLATEAU の床の重なり ${(s.overlapJrPlateau * 100).toFixed(1)}%（ずらし最適 東 ${s.bestShiftJr.sx * 0.5} m・北 ${s.bestShiftJr.sy * 0.5} m）`,
+    `OSM 地下 1 階が床の上を通る割合 ${(s.osmOnFloorBefore * 100).toFixed(1)}% → ${(s.osmOnFloorAfter * 100).toFixed(1)}%、壁を横切る所 ${s.wallCrossBefore} → ${s.wallCrossAfter}`,
+    `接続線 ${s.connectors}・まとまり ${s.components}（本体 ${(100 * s.mainComponent / s.nodesUsed).toFixed(1)}%）`,
+    `床の穴（2 m² 以上）${s.bigHoles}・うち経路が通る ${s.holesOnPath}、天井の無い床 ${s.noCeil} ます、JR の中の PLATEAU の壁 ${s.wallInJr} 本`,
+    `<a href="../out/report.md" target="_blank">点検結果（report.md）</a>`,
+  ].join('<br>');
+  renderLevels(); renderLayers(); rebuild();
+});
+map.on('click', () => { selIssue = null; rebuild(); });
+</script>
+</body>
+</html>
