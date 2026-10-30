@@ -134,7 +134,7 @@ function materials() {
     mallInst: lam({ color: '#a9a49b', side: THREE.DoubleSide }),
     mallPillar: lam({ map: panelTexture('#ece7dd', '#cdc5b6', 0.6), side: THREE.DoubleSide }), // JR の範囲の柱（PLATEAU）
     mallDoor: new THREE.MeshLambertMaterial({ color: '#b5d3df', transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }),
-    mallClosure: new THREE.MeshBasicMaterial({ map: panelTexture('#f4ead6', '#cdbb98', 1.8), side: THREE.DoubleSide }), // データの範囲外への口（明かりの入ったガラスのつもり）
+    mallClosure: lam({ map: panelTexture('#c9c5bd', '#9d988f', 0.45), side: THREE.DoubleSide }), // データの範囲外への口（閉まったシャッターのつもり。明るいガラス風だと「半透明の壁の先に行けない」と見えた）
     track: lam({ color: '#8a7f70' }),
     apron: lam({ map: tileTexture('#b9b5ad', '#a29d94', 128, 2), side: THREE.DoubleSide }), // 向きが辺ごとに違うので両面
   };
@@ -551,6 +551,22 @@ export function buildWorld(data, mallBuf, scene) {
     } else {
       push('esc', V(...P([ax, ay], 1, az)), V(...P([ax, ay], -1, az)), V(...P([bx, by], -1, bz)), V(...P([ax, ay], 1, az)), V(...P([bx, by], -1, bz)), V(...P([bx, by], 1, bz)));
     }
+    // 出口の階段室: 両側の壁（床から段の 2.7 m 上まで）と段に沿った天井。地上の口だけ開く（空に浮いた板に見えた）
+    if (r.exit) {
+      // 天井は「3 m 上った所の段の 2.7 m 上」（上の端の 3 m 手前から平ら）。段と平行だと、上の端に立って下を見たとき目の高さに天井が来て段が見えなかった
+      const HC = 2.7, len0 = Math.hypot(bx - ax, by - ay), rise0 = bz - az, cz = (s) => az + (rise0 * Math.min(len0, s + 3)) / len0 + HC;
+      const pt = (s, side) => P([ax + (bx - ax) * (s / len0), ay + (by - ay) * (s / len0)], side, 0);
+      const sk = Math.max(0, len0 - 3);
+      for (const side of [1, -1]) {
+        const p0 = pt(0, side), pk = pt(sk, side), p1 = pt(len0, side);
+        push('side', V(p0[0], p0[1], az - 0.05), V(pk[0], pk[1], az - 0.05), V(pk[0], pk[1], cz(sk)), V(p0[0], p0[1], az - 0.05), V(pk[0], pk[1], cz(sk)), V(p0[0], p0[1], cz(0)));
+        push('side', V(pk[0], pk[1], az - 0.05), V(p1[0], p1[1], az - 0.05), V(p1[0], p1[1], cz(len0)), V(pk[0], pk[1], az - 0.05), V(p1[0], p1[1], cz(len0)), V(pk[0], pk[1], cz(sk)));
+      }
+      for (const [s0, s1] of [[0, sk], [sk, len0]]) {
+        const L0 = pt(s0, 1), R0 = pt(s0, -1), L1 = pt(s1, 1), R1 = pt(s1, -1);
+        push('roof', V(L0[0], L0[1], cz(s0)), V(R0[0], R0[1], cz(s0)), V(R1[0], R1[1], cz(s1)), V(L0[0], L0[1], cz(s0)), V(R1[0], R1[1], cz(s1)), V(L1[0], L1[1], cz(s1)));
+      }
+    }
     // 段の下は厚み 0.4 m の板。両側の帯は板の下から段の 1 m 上まで。
     // 高い側の下は、頭がつかえない所（板の下が床から 1.75 m 以上）までくぐれる。その先はふさぐ
     const TH = 0.4, rise = Math.max(0.01, bz - az);
@@ -700,7 +716,7 @@ export function buildWorld(data, mallBuf, scene) {
   const toThree = (src) => { const o = new Float32Array(src.length); for (let i = 0; i < src.length; i += 3) { o[i] = src[i]; o[i + 1] = src[i + 2]; o[i + 2] = -src[i + 1]; } return o; };
   const mf = get('floor');
   for (let i = 0; i < mf.length; i += 9) phys.addFloor([mf[i], mf[i + 1], mf[i + 2]], [mf[i + 3], mf[i + 4], mf[i + 5]], [mf[i + 6], mf[i + 7], mf[i + 8]]);
-  for (const k of ['wall', 'inst', 'pillar']) { const w = get(k); for (let i = 0; i < w.length; i += 9) phys.addWallTri(w.subarray(i, i + 9)); }
+  for (const k of ['wall', 'inst', 'pillar', 'closure']) { const w = get(k); for (let i = 0; i < w.length; i += 9) phys.addWallTri(w.subarray(i, i + 9)); } // 閉じる面（向こうはデータの範囲外）も当たる
   const mallMeshes = [
     meshOf(toThree(mf), M.mallFloor, { uv: true }), meshOf(toThree(get('wall')), M.mallWall, { uv: 'side' }), meshOf(toThree(get('ceil')), M.mallCeil),
     meshOf(toThree(get('inst')), M.mallInst), meshOf(toThree(get('door')), M.mallDoor),

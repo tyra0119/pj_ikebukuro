@@ -2,17 +2,17 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvufnss5';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvufnss5';
-import { addTrains } from './trains.js?v=mvufnss5';
-import { routeSteps, stepLine } from './steps.js?v=mvufnss5';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuhcxtg';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuhcxtg';
+import { addTrains } from './trains.js?v=mvuhcxtg';
+import { routeSteps, stepLine } from './steps.js?v=mvuhcxtg';
 import { initMeet } from './meet.js';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvufnss5'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvuhcxtg'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -131,6 +131,23 @@ function sign(text, { bg = '#f5c400', fg = '#111', badge = null, badgeColor = nu
   return s;
 }
 const placed = [];
+// 札の位置が柱・壁の線から 0.8 m 以内なら、線と直角の向きに 1 m 離す（床のある側。池袋の南改札の案内所の札が PLATEAU の柱に隠れた）
+function awayFromWall(x, y, z) {
+  let best = null;
+  for (const [ax, ay, bx, by] of phys.segsNear(x, y, z + 2.0, 1.5)) {
+    const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy; if (!L) continue;
+    const t = Math.max(0, Math.min(1, ((x - ax) * dx + (y - ay) * dy) / L)), px = ax + dx * t, py = ay + dy * t, dd = Math.hypot(x - px, y - py);
+    if (dd < 0.8 && (!best || dd < best.d)) best = { d: dd, nx: -dy / Math.sqrt(L), ny: dx / Math.sqrt(L), px, py };
+  }
+  if (!best) return [x, y];
+  // 線と直角に 1〜2 m、線に沿って ±1.2 m の順に試す（案内所の札は箱の前の線の上にあり、すぐ横に丸い柱があった）
+  const tx = best.ny, ty = -best.nx;
+  for (const [d, e] of [[1, 0], [-1, 0], [1.5, 0], [-1.5, 0], [0.7, 1.2], [0.7, -1.2], [-0.7, 1.2], [-0.7, -1.2], [2, 0], [-2, 0]]) {
+    const qx = best.px + best.nx * d + tx * e, qy = best.py + best.ny * d + ty * e;
+    if (phys.groundAt(qx, qy, z) != null && !phys.segsNear(qx, qy, z + 2.0, 0.5).length) return [qx, qy];
+  }
+  return [x, y];
+}
 const addSign = (s, x, y, z, near = 2.5) => { // near: 同じ札をまとめる距離
   if (placed.some((p) => Math.hypot(p[0] - x, p[1] - y) < near && Math.abs(p[2] - z) < 1 && p[3] === s.userData.key)) return;
   placed.push([x, y, z, s.userData.key]);
@@ -152,7 +169,7 @@ for (const d of data.dest) {
   }
   // 地下街: 出口は黄色、ほかの会社の改札は薄紫、お店・地下街は白い小さな札（通路から遠いものは置かない）
   if (d.t === 'exit' || d.t === 'ogate') { const s = sign(d.name, { bg: d.t === 'exit' ? '#f5c400' : '#e4d8f3' }); s.userData.key = d.name; addSign(s, ...(d.sign || [d.x, d.y]), d.sz ?? z + 2.25); } // sign・sz: 出口の階段の上り口の上（前処理で決めた所）
-  if (d.t === 'fac') { const [ch, col] = FAC_ICON[d.kind]; const s = sign(FAC_LABEL[d.kind], { bg: '#1c3f74', fg: '#fff', badge: ch, badgeColor: col, h: 0.42 }); s.userData.key = 'fac' + d.kind; addSign(s, d.sign[0], d.sign[1], d.sz ?? z + 2.3); } // sz: 売店・案内所の箱の上
+  if (d.t === 'fac') { const [ch, col] = FAC_ICON[d.kind]; const s = sign(FAC_LABEL[d.kind], { bg: '#1c3f74', fg: '#fff', badge: ch, badgeColor: col, h: 0.42 }); s.userData.key = 'fac' + d.kind; const [px, py] = awayFromWall(d.sign[0], d.sign[1], z); addSign(s, px, py, d.sz ?? z + 2.3); } // sz: 売店・案内所の箱の上
   if (d.t === 'spot' && !d.near) { const s = sign(d.name, { bg: '#fff', h: 0.38 }); s.userData.key = d.name; addSign(s, d.x, d.y, d.sz ?? z + 2.15); }
   // 階段の上の端の近くには置かない（上ってくる途中で目の前に大きく出る）
   if (d.t === 'plat') for (const [x, y] of d.signs) { if (data.ramps.some((r) => r.lb === d.level && Math.hypot(r.b[0] - x, r.b[1] - y) < 6)) continue; const s = sign(`${d.name.replace(/^\S+番線 /, '')} ${d.dir || ''}`.trim(), { bg: '#fff', badge: String(d.code), badgeColor: d.color }); s.userData.key = d.name; addSign(s, x, y, z + 2.7); }
@@ -767,9 +784,21 @@ const guideSigns = [];
         if (ps.length) segs.push({ arrow: k, kind: 'plat', text: allPlats.size > 2 && ps.length === allPlats.size ? 'のりば（全番線）' : codeList(ps.map((t) => t.code)) });
       }
       // 置く所: 分かれ道の手前 2.5 m（線が短ければ半分）。床の上で、天井の下
-      const back = Math.min(2.5, L / 2), px = jx - ux * back, py = jy - uy * back;
-      const gz = phys.groundAt(px, py, LV[jl].z);
-      if (gz == null || Math.abs(gz - LV[jl].z) > 0.6) continue;
+      // 看板の幅（最大 4.2 m）に柱・壁がかかる所は避ける: 手前 2.5 m がだめなら 1.5・3.5・4.5 m（線の半分まで）を試す（池袋の (-16,-31) で柱に札が切れた）
+      let px, py, gz = null;
+      for (const back of [2.5, 1.5, 3.5, 4.5]) {
+        if (back > L / 2 && back !== 1.5) continue;
+        const qx = jx - ux * back, qy = jy - uy * back, g = phys.groundAt(qx, qy, LV[jl].z);
+        if (g == null || Math.abs(g - LV[jl].z) > 0.6) continue;
+        const hw = 2.2, ex = -uy, ey = ux, a0 = [qx - ex * hw, qy - ey * hw], a1 = [qx + ex * hw, qy + ey * hw];
+        const cross = (p, q, r, s) => { const d = (q[0] - p[0]) * (s[1] - r[1]) - (q[1] - p[1]) * (s[0] - r[0]); if (Math.abs(d) < 1e-9) return false; const t = ((r[0] - p[0]) * (s[1] - r[1]) - (r[1] - p[1]) * (s[0] - r[0])) / d, u = ((r[0] - p[0]) * (q[1] - p[1]) - (r[1] - p[1]) * (q[0] - p[0])) / d; return t > 0 && t < 1 && u > 0 && u < 1; };
+        const segs = phys.segsNear(qx, qy, g + 2.2, hw + 2.5);
+        let bad = false;
+        for (let dd = 0; dd <= 3.5 && !bad; dd += 0.5) { const b0 = [a0[0] - ux * dd, a0[1] - uy * dd], b1 = [a1[0] - ux * dd, a1[1] - uy * dd]; if (segs.some(([sx, sy, tx, ty]) => cross(b0, b1, [sx, sy], [tx, ty]))) bad = true; } // 看板の面と、その手前 3.5 m まで
+        if (bad) continue;
+        px = qx; py = qy; gz = g; break;
+      }
+      if (gz == null) continue;
       const key = segs.map((sg) => sg.arrow + sg.text).join('|');
       if (guideSigns.some((s) => s.l === jl && s.ux * ux + s.uy * uy > 0.7 && Math.hypot(s.x - px, s.y - py) < (s.key === key ? 30 : 15))) continue; // 同じ向きは 15 m、同じ中身は 30 m 以内に 2 つ置かない
       if (guideSigns.some((s) => s.l === jl && Math.hypot(s.x - px, s.y - py) < 1.5)) continue;

@@ -27,6 +27,7 @@ export class Guide {
     if (guess) s = pr === 'ev' && this.N(a)[2] !== this.N(b)[2] ? s * 3 + 120 : s * 1.5 + 15;
     if (cross) s += 10;
     if (mode === GATE && !fareOK) s += 3600; // 改札の中を通り抜ける近道は避ける（運賃がかかる）
+    if (l[8]) s = s * 20 + 300; // 歩く立体に床の無い点（地下 2 階・データの範囲外）につながる線: ほかに道が無いときだけ
     return s;
   }
   dijkstra(src, pr, fareOK = false) {
