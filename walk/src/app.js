@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvuurtam';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuurtam';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuurtam';
-import { addTrains } from './trains.js?v=mvuurtam';
-import { routeSteps, stepLine } from './steps.js?v=mvuurtam';
-import { initMeet } from './meet.js?v=mvuurtam';
+import { initPhoto } from './photo.js?v=mvuxn8hs';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuxn8hs';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuxn8hs';
+import { addTrains } from './trains.js?v=mvuxn8hs';
+import { routeSteps, stepLine } from './steps.js?v=mvuxn8hs';
+import { initMeet } from './meet.js?v=mvuxn8hs';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvuurtam'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvuxn8hs'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -187,6 +187,28 @@ for (const d of data.dest) {
   if (d.t === 'spot' && !d.near) { const s = sign(d.name, { bg: '#fff', h: 0.38 }); s.userData.key = d.name; addSign(s, d.x, d.y, d.sz ?? z + 2.15); }
   // 階段の上の端の近くには置かない（上ってくる途中で目の前に大きく出る）
   if (d.t === 'plat') for (const [x, y] of d.signs) { if (data.ramps.some((r) => r.lb === d.level && Math.hypot(r.b[0] - x, r.b[1] - y) < 6)) continue; const s = sign(`${d.name.replace(/^\S+番線 /, '')} ${d.dir || ''}`.trim(), { bg: '#fff', badge: String(d.code), badgeColor: d.color }); s.userData.key = d.name; addSign(s, x, y, z + 2.7); }
+}
+// 地上の出口の札: 地下から地上へ出る階段（坂の exit）の階段室の屋根の上に、下りる矢印と出口の番号（地下街の出口の点が上の端から 20 m 以内のもの。
+// 近い出口は「出口 41・42」とまとめる）。番号の無い階段は「地下通路」（利用者 2026-10-30「地上に出口札表示できる？」）
+const gExitLabels = []; // 小さな地図の 1F に描く出口の番号 [x, y, 文字]
+if (LV['1']) {
+  const exitRamps = data.ramps.filter((r) => r.exit && r.lb === 1), names = exitRamps.map(() => []);
+  for (const d of data.dest) {
+    if (d.t !== 'exit') continue;
+    let bi = -1, bd = 20;
+    exitRamps.forEach((r, i) => { const k = Math.hypot(r.b[0] - d.x, r.b[1] - d.y); if (k < bd) { bd = k; bi = i; } });
+    if (bi >= 0) names[bi].push(d.name.replace(/^出口\s*/, ''));
+  }
+  const num = (t) => parseInt(t, 10) || 0;
+  exitRamps.forEach((r, i) => {
+    const len = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]) || 1, ux = (r.b[0] - r.a[0]) / len, uy = (r.b[1] - r.a[1]) / len;
+    const ns = names[i].sort((p, q) => num(p) - num(q) || p.localeCompare(q));
+    const s = ns.length ? sign(`出口 ${ns.join('・')}`, { bg: '#f5c400', arrow: 'down' }) : sign('地下通路', { bg: '#fff', arrow: 'down', h: 0.42 });
+    if (ns.length) gExitLabels.push([r.b[0], r.b[1], `出${ns.join('・')}`]);
+    // 階段室の屋根（地上の 2.7 m 上。world.js）の口のふちの上に載せる（屋根の下だと、横や後ろから屋根と壁に隠れた）。addSign は屋根の下へ下げるので使わない
+    s.position.copy(V3(r.b[0] - ux * 0.4, r.b[1] - uy * 0.4, LV['1'].z + 2.7 + s.scale.y / 2 + 0.12));
+    scene.add(s);
+  });
 }
 // 階段・エスカレーターの下に、上った先の番線（ホームに着かないものは上の階の改札）
 const ROUTE_NAME = Object.fromEntries(data.dest.filter((d) => d.t === 'plat').map((d) => [d.route, [d.name.replace(/^\S+番線 /, ''), d.color]]));
@@ -1479,6 +1501,13 @@ function drawMini() {
     miniHits.push([x - w / 2 - 4, y - 11, x + w / 2 + 4, y + 11, d]); // 指で押しやすく少し広く
     mg.fillStyle = d.t === 'toilet' || d.t === 'fac' ? '#fff' : '#111';
     mg.fillText(t, x, y);
+  }
+  if (pl === '1') for (const [gx, gy, t] of gExitLabels) { // 地上の出口の番号（地下へ下りる階段の口）
+    const [x, y] = W2S(gx, gy);
+    if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
+    const w = mg.measureText(t).width + 6;
+    mg.fillStyle = '#f5c400'; mg.fillRect(x - w / 2, y - 7, w, 14);
+    mg.fillStyle = '#111'; mg.fillText(t, x, y);
   }
   const goal = nav.dest ? [nav.dest.x, nav.dest.y, true] : replay.samples ? (() => { const e = replay.samples[replay.samples.length - 1]; return [e.x, e.y, String(levelOf(e.z)) === pl]; })() : herePin ? [herePin.x, herePin.y, String(herePin.level) === pl] : null; // 足あとの終わり・「ここにいます」の相手も、その階を出しているとき
   if (goal && goal[2]) {
