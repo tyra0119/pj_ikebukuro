@@ -2,17 +2,17 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvueby7o';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvueby7o';
-import { addTrains } from './trains.js?v=mvueby7o';
-import { routeSteps, stepLine } from './steps.js?v=mvueby7o';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvueju5p';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvueju5p';
+import { addTrains } from './trains.js?v=mvueju5p';
+import { routeSteps, stepLine } from './steps.js?v=mvueju5p';
 import { initMeet } from './meet.js';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvueby7o'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvueju5p'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -1406,6 +1406,15 @@ function drawMini() {
     const [x, y] = W2S(goal[0], goal[1]);
     mg.fillStyle = '#e8453c'; mg.beginPath(); mg.arc(x, y - 9, 6, 0, Math.PI * 2); mg.moveTo(x - 5, y - 6); mg.lineTo(x, y); mg.lineTo(x + 5, y - 6); mg.fill();
   }
+  // あいて（待ち合わせの部屋でつながっているとき。向きつき、だいだい）
+  if (meetShared.p && String(meetShared.p.l) === pl) {
+    const [x, y] = W2S(meetShared.p.x, meetShared.p.y);
+    mg.save(); mg.translate(x, y); mg.rotate(((meetShared.p.yaw || 0) * Math.PI) / 180 - mini.rot);
+    mg.fillStyle = '#f08c00'; mg.strokeStyle = '#fff'; mg.lineWidth = 2;
+    mg.beginPath(); mg.moveTo(0, -9); mg.lineTo(6, 6); mg.lineTo(0, 3); mg.lineTo(-6, 6); mg.closePath(); mg.fill(); mg.stroke();
+    mg.restore();
+    mg.fillStyle = '#f08c00'; mg.font = 'bold 11px system-ui, sans-serif'; mg.textAlign = 'center'; mg.fillText('あいて', x, y - 14);
+  }
   // 移動先
   if (jump) {
     const [x, y] = W2S(jump.to[0], jump.to[1]);
@@ -1868,7 +1877,8 @@ if (!replaying) {
 }
 
 // ---------- 待ち合わせ案内（統合データ。図と手順 + 立体） ----------
-const meet = await initMeet({ $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, setMeetRoute: (r) => { nav.fixed = r; setDest(r); }, clearRoute: () => setDest(null) });
+const meetShared = { p: null }; // あいての位置（小さな地図が描く）
+const meet = await initMeet({ $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared: meetShared, setMeetRoute: (r) => { nav.fixed = r; setDest(r); }, clearRoute: () => setDest(null) });
 
 // ---------- はじめの説明 ----------
 const seen = (() => { try { return localStorage.getItem('ekisanpo.help') === '1'; } catch { return false; } })();
@@ -2037,4 +2047,4 @@ $('loading').hidden = true;
 requestAnimationFrame(frame);
 
 // 確かめ用（コンソールから位置を見る・動かす）
-window.ekisanpo = { me, phys, setDest, data, move, nav, rec, replay, encodeTrack, decodeTrack, trains, mini, jumpTo, W2S, S2W, getGrid, gridPath, startAt, scene, camera, THREE, fareSide, stepHelp, fareRows, guideSigns };
+window.ekisanpo = { me, phys, setDest, data, move, nav, rec, replay, meet, encodeTrack, decodeTrack, trains, mini, jumpTo, W2S, S2W, getGrid, gridPath, startAt, scene, camera, THREE, fareSide, stepHelp, fareRows, guideSigns };

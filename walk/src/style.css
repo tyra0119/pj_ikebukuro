@@ -226,3 +226,5 @@ body.touch .pc, body:not(.touch) .touch { display: none; }
 #meetSteps .no.s { background: #0b8f4d; } #meetSteps .no.g { background: #e8453c; }
 #meetSteps .d { color: var(--sub); font-size: 12px; line-height: 1.4; }
 #meetSteps > li > button > small:last-child { color: var(--sub); font-size: 11px; margin-left: auto; white-space: nowrap; border: 1px solid var(--line); border-radius: 8px; padding: 1px 6px; }
+
+#meetPartner { background: #fff3e0; border-left: 3px solid #f08c00; padding: 6px 8px; border-radius: 6px; font-size: 13px; }

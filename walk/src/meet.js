@@ -3,9 +3,10 @@
 // 地上の区間はまだ立体に床が無いので、図と手順だけで案内し、立体は駅・地下街に入る所から歩く。
 
 import { Guide, lvName } from './guide.js';
+import { startRoom, roomId } from './room.js';
 
 export async function initMeet(A) {
-  const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, setMeetRoute, clearRoute } = A;
+  const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared, setMeetRoute, clearRoute } = A;
   let D;
   try { D = await fetch(`data/meet.json${VER}`).then((r) => r.json()); } catch { return; }
   const G = new Guide(D);
@@ -16,6 +17,51 @@ export async function initMeet(A) {
   const spots = D.spots.map((s) => ({ ...s, type: 'spot', id: 'spot:' + s.key }));
   const find = (id) => fromList.find((x) => x.id === id) || spots.find((x) => x.id === id);
   let cur = null; // { from, to, pr, r, pts, walkFrom }
+  // ---- ふたりで待ち合わせ（部屋）。わたしの位置・進み具合を置き、あいての分を読んで、立体（人の形と光の柱）・小さな地図・パネルに出す
+  let room = null, partner = null, fig = null, figTo = null;
+  const mine = () => ({ v: 1, t: Date.now(), x: Math.round(me.x), y: Math.round(me.y), l: levelOf(me.z), yaw: Math.round((me.yaw * 180) / Math.PI), k: cur ? cur.k ?? 0 : 0, n: cur ? cur.r.steps.length : 0, rem: cur ? Math.round(cur.rem ?? 0) : 0, at: !!(cur && (nav.arrived || cur.k >= cur.r.steps.length - 1)), from: cur ? cur.from.id : null, to: cur ? cur.to.id : null, pr: cur ? cur.pr : null });
+  function makeFig() {
+    const g = new THREE.Group();
+    const mat = new THREE.MeshLambertMaterial({ color: '#f08c00' });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.26, 1.15, 16), mat); body.position.y = 0.6;
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.17, 16, 12), new THREE.MeshLambertMaterial({ color: '#ffd9a8' })); head.position.y = 1.4;
+    const col = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 2.8, 24, 1, true), new THREE.MeshBasicMaterial({ color: '#f08c00', transparent: true, opacity: 0.25, depthWrite: false, side: THREE.DoubleSide, fog: false })); col.position.y = 1.4;
+    const xray = new THREE.Mesh(new THREE.CylinderGeometry(0.4, 0.4, 2.8, 24, 1, true), new THREE.MeshBasicMaterial({ color: '#f08c00', transparent: true, opacity: 0.18, depthWrite: false, depthTest: false, side: THREE.DoubleSide, fog: false })); xray.position.y = 1.4; xray.renderOrder = 6;
+    g.add(body, head, col, xray); g.visible = false; scene.add(g);
+    return g;
+  }
+  function placeFig() { // あいての位置へ（1 秒かけて寄せる）
+    if (!partner || partner.l == null || !LV[partner.l]) { if (fig) fig.visible = false; return; }
+    fig = fig || makeFig();
+    const z = floorNear(partner.x, partner.y, LV[partner.l].z) ?? LV[partner.l].z;
+    const to = V3(partner.x, partner.y, z);
+    if (!fig.visible) { fig.position.copy(to); fig.visible = true; }
+    figTo = { from: fig.position.clone(), to, t0: performance.now() };
+    fig.rotation.y = -((partner.yaw || 0) * Math.PI) / 180;
+    const step = () => { if (!figTo) return; const u = Math.min(1, (performance.now() - figTo.t0) / 1000); fig.position.lerpVectors(figTo.from, figTo.to, u); if (u < 1) requestAnimationFrame(step); else figTo = null; };
+    requestAnimationFrame(step);
+  }
+  function partnerText() {
+    if (!room) return '';
+    if (!partner) return 'あいてを待っています…（リンクを開くと、ここにあいての様子が出ます）';
+    const ago = Math.round((Date.now() - partner.recvAt) / 1000), old = partner.t && Date.now() - partner.t > 5 * 60 * 1000;
+    const where = partner.l != null && LV[partner.l] ? LV[partner.l].name : '';
+    let t = partner.at ? 'あいてはもう着いています' : partner.n ? `あいてはいま ${partner.k} / ${partner.n - 1}（${where}）、あと約${partner.rem} m` : `あいては${where}にいます（まだ案内を始めていません）`;
+    if (cur && !partner.at && partner.n) { const sec = Math.max(cur.rem ?? 0, partner.rem) / 1.25; t += `。そろうまで約${Math.max(1, Math.round(sec / 60))}分`; }
+    if (old) t += '（しばらく更新がありません）'; else if (ago > 15) t += `（${ago} 秒前）`;
+    return t;
+  }
+  function paintPartner() { const el = $('meetPartner'); el.hidden = !room; el.textContent = partnerText(); }
+  function startShare(role, id) {
+    if (room) room.stop();
+    room = startRoom({ id, role, mine, onPartner: (o) => { partner = { ...o, recvAt: Date.now() }; shared.p = partner; placeFig(); paintPartner(); if (partner.at && !room.toldAt) { room.toldAt = true; toast('あいてが待ち合わせ場所に着きました'); } }, onError: () => paintPartner() });
+    if (!room) return;
+    room.role = role; room.id = id;
+    $('meetStop').hidden = false; paintPartner();
+    setInterval(paintPartner, 5000);
+  }
+  function stopShare() { if (room) room.stop(); room = null; partner = null; shared.p = null; if (fig) fig.visible = false; $('meetStop').hidden = true; paintPartner(); const u = new URL(location.href); u.searchParams.delete('room'); u.searchParams.delete('role'); history.replaceState(null, '', u); toast('共有をやめました'); }
+  $('meetStop').onclick = stopShare;
 
   // ---- 画面
   const fromSel = $('meetFrom'), toSel = $('meetTo'), prSel = $('meetPr');
@@ -34,11 +80,12 @@ export async function initMeet(A) {
   $('meetWalk').onclick = () => { if (cur) walkFrom(cur.walkFrom); };
   $('meetShare').onclick = async () => {
     if (!cur) return;
+    if (!room) { startShare('a', roomId()); const u = new URL(location.href); u.searchParams.set('room', room.id); u.searchParams.set('role', 'a'); history.replaceState(null, '', u); }
     const url = shareURL();
-    if (navigator.share) { try { await navigator.share({ title: '池袋 待ち合わせ案内', text: `${cur.from.name} → ${cur.to.name}（約${Math.max(1, Math.round(cur.r.total / 60))}分）`, url }); return; } catch { /* 取り消し */ } }
+    if (navigator.share) { try { await navigator.share({ title: '池袋 待ち合わせ案内', text: `${cur.from.name} → ${cur.to.name}（約${Math.max(1, Math.round(cur.r.total / 60))}分）。開くと、お互いの位置と進み具合が見えます`, url }); return; } catch { /* 取り消し */ } }
     try { await navigator.clipboard.writeText(url); toast('リンクをコピーしました'); } catch { toast(url); }
   };
-  const shareURL = () => { const u = new URL(location.href); u.hash = ''; u.searchParams.delete('from'); u.searchParams.delete('to'); u.searchParams.set('mfrom', cur.from.id); u.searchParams.set('mto', cur.to.id); u.searchParams.set('pr', cur.pr); return u.href; };
+  const shareURL = () => { const u = new URL(location.href); u.hash = ''; u.searchParams.delete('from'); u.searchParams.delete('to'); u.searchParams.set('mfrom', cur.from.id); u.searchParams.set('mto', cur.to.id); u.searchParams.set('pr', cur.pr); if (room) { u.searchParams.set('room', room.id); u.searchParams.set('role', room.role === 'a' ? 'b' : 'a'); } return u.href; };
 
   // ---- 経路 → 立体の道筋。地上（国交省の歩道）の点は歩けないので、駅・地下街に入って床のある最初の点から
   function toPts(E) {
@@ -70,6 +117,7 @@ export async function initMeet(A) {
       // 案内カードの文: 道筋の上のいまの位置（app.js の progress()）から、次の手順まで
       const hintAt = (pr) => {
         const sCur = cum[pr.i - 1] + (cum[pr.i] - cum[pr.i - 1]) * pr.t;
+        cur.rem = Math.max(0, cum[cum.length - 1] - sCur);
         let next = -1; for (let k = 1; k < r.steps.length; k++) if (stepS[k] > sCur - 1) { next = k; break; }
         let curK = 0; for (let k = 0; k < r.steps.length - 1; k++) if (stepS[k] <= sCur + 1) curK = k;
         if (curK !== cur.k) { cur.k = curK; highlight(curK); }
@@ -147,5 +195,6 @@ export async function initMeet(A) {
     if (cur && cur.walkFrom >= 0) { const p = cur.pts[cur.walkFrom]; jumpTo(p.x, p.y, p.l, true); }
     $('meetPanel').hidden = false;
   }
-  return { run, render, get cur() { return cur; } };
+  if (q.get('room') && q.get('role')) startShare(q.get('role'), q.get('room'));
+  return { run, render, get cur() { return cur; }, get partner() { return partner; }, get room() { return room; }, startShare, stopShare };
 }
