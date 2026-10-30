@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>エキさんぽ</title>
 <meta name="description" content="JR の駅（池袋・東京・新宿・渋谷・品川・高輪ゲートウェイ）と地下街を、人の目線で自由に歩き回れる立体の構内図">
-<link rel="stylesheet" href="src/style.css?v=mvuz5zc4">
+<link rel="stylesheet" href="src/style.css?v=mvv0acyr">
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
@@ -92,14 +92,6 @@
 
 <div id="stick" hidden><div class="knob"></div></div>
 
-<div id="dpad" aria-label="歩く操作">
-  <button type="button" data-k="ArrowUp" class="u" aria-label="前へ">▲</button>
-  <button type="button" data-k="ArrowLeft" class="l" aria-label="左を向く">◀</button>
-  <button type="button" id="runBtn" class="c" aria-label="走る">走る</button>
-  <button type="button" data-k="ArrowRight" class="r" aria-label="右を向く">▶</button>
-  <button type="button" data-k="ArrowDown" class="d" aria-label="後ろへ">▼</button>
-</div>
-
 <div id="routePanel" hidden>
   <div class="sheet">
     <div class="head"><b>道順</b><button id="routeClose" class="x" type="button" aria-label="閉じる">✕</button></div>
@@ -183,7 +175,7 @@
     <ul>
       <li class="pc"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>・矢印キーで歩く、<kbd>Shift</kbd> で速く</li>
       <li class="pc">画面をドラッグで見回す</li>
-      <li class="touch">左下の十字キーで歩く（▲▼ で前後、◀▶ で向きを変える、真ん中で走る）。左側を押したまま動かしても歩ける</li>
+      <li class="touch">画面の左側を押したまま動かすと歩く（大きく倒すと走る）。右側をなぞると見回す</li>
       <li class="touch">右側をなぞると見回す</li>
       <li>右下の地図をタップすると「行き先にする」「ここへ移動」を選べる（改札・出口・トイレなどの印でも、印の無い所でも）。左の 2F・1F・B1 で階を切り替え、右上のボタンで地図を大きく。現在地のボタンをもう一度押すと進む向きが上に（方角のボタンで北が上に戻る）</li>
       <li>「出発・行き先」で出発（いまいる所のままでもよい）と行き先（改札・ホーム・トイレ・エレベーター・地下街の出口やお店）を選び、「案内を始める」で床の矢印と画面上の矢印の案内。上の札に次の曲がる所・改札・階段と目印、行き先には光の柱</li>
@@ -193,7 +185,7 @@
       <li>壁や改札機にはぶつかります。改札機のあいだを通り抜けてください</li>
     </ul>
     <p id="helpCredit" class="note"></p>
-    <p class="note"><a href="manual.html" target="_blank" rel="noopener">使い方（録画と共有・URL・データ）</a>　版: <span id="appVer">10/30 21:55（mvuz5zc4）</span></p>
+    <p class="note"><a href="manual.html" target="_blank" rel="noopener">使い方（録画と共有・URL・データ）</a>　版: <span id="appVer">10/30 22:26（mvv0acyr）</span></p>
     <button id="helpOk" class="btn primary" type="button">歩きはじめる</button>
   </div>
 </div>
@@ -201,6 +193,6 @@
 <footer id="credit"></footer>
 <div id="loading">読み込み中…</div>
 
-<script type="module" src="src/app.js?v=mvuz5zc4"></script>
+<script type="module" src="src/app.js?v=mvv0acyr"></script>
 </body>
 </html>

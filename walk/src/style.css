@@ -66,7 +66,7 @@ a.btn { text-decoration: none; display: inline-block; }
 /* 地図を大きくするボタン（地図の右上の角。右の 4 つのボタンの列と右の端をそろえる）。大きくしたときは十字キーを隠す（スマホで地図が重なる） */
 .bigBtn { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 8px; border: none; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); display: grid; place-items: center; padding: 0; }
 #mini.big { width: min(520px, calc(100vw - 24px)); height: min(520px, calc(100vh - 160px)); }
-body.miniBig #dpad, body.miniBig #stick { visibility: hidden; }
+body.miniBig #stick { visibility: hidden; }
 .mapBtns .zoom { display: flex; flex-direction: column; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
 .mapBtns .zoom button { box-shadow: none; border-radius: 0; }
 .mapBtns .zoom button + button { border-top: 1px solid #e3e3e3; }
@@ -91,14 +91,8 @@ body.miniBig #dpad, body.miniBig #stick { visibility: hidden; }
 #stick .knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(255,255,255,0.8); }
 
 /* 十字キー（スマホだけ） */
-#dpad { position: fixed; left: 14px; bottom: calc(max(18px, env(safe-area-inset-bottom)) + 10px); width: 150px; height: 150px; display: none; grid-template: repeat(3, 1fr) / repeat(3, 1fr); gap: 3px; touch-action: none; user-select: none; -webkit-user-select: none; }
-body.touch #dpad { display: grid; }
-#dpad button { border: none; border-radius: 12px; background: rgba(255,255,255,0.72); color: #333; font-size: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.25); touch-action: none; -webkit-touch-callout: none; }
-#dpad button.on { background: var(--accent); color: #fff; }
-#dpad .u { grid-area: 1 / 2; } #dpad .l { grid-area: 2 / 1; } #dpad .c { grid-area: 2 / 2; font-size: 12px; font-weight: 700; border-radius: 50%; } #dpad .r { grid-area: 2 / 3; } #dpad .d { grid-area: 3 / 2; }
 /* スマホ: 出典は一番下に 1 行（全文は説明の画面）。十字キーと地図はその上 */
 body.touch #credit { left: 8px; right: 8px; max-width: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-body.touch #dpad { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 14px); }
 body.touch #mini { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 14px); }
 body.riding #view { filter: brightness(0.55); transition: filter 0.4s; }
 #view { transition: filter 0.4s; }

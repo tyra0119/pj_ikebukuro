@@ -1,19 +1,19 @@
 // エキさんぽ: JR の駅（池袋・東京・新宿・渋谷・品川・高輪ゲートウェイ）と地下街を人の目線で歩き回る。駅は URL の ?st=<駅>。
-// 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
+// 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvuz5zc4';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuz5zc4';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuz5zc4';
-import { addTrains } from './trains.js?v=mvuz5zc4';
-import { routeSteps, stepLine } from './steps.js?v=mvuz5zc4';
-import { initMeet } from './meet.js?v=mvuz5zc4';
+import { initPhoto } from './photo.js?v=mvv0acyr';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvv0acyr';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvv0acyr';
+import { addTrains } from './trains.js?v=mvv0acyr';
+import { routeSteps, stepLine } from './steps.js?v=mvv0acyr';
+import { initMeet } from './meet.js?v=mvv0acyr';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvuz5zc4'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvv0acyr'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -331,22 +331,7 @@ view.addEventListener('pointerup', endPtr);
 view.addEventListener('pointercancel', endPtr);
 view.addEventListener('contextmenu', (e) => e.preventDefault());
 
-// 十字キー（スマホ）: ↑↓ で前後、←→ で向きを変える。押している間ずっと。「走る」は切り替え
-let running = false;
-for (const b of document.querySelectorAll('#dpad [data-k]')) {
-  const k = b.dataset.k;
-  const on = (e) => {
-    e.preventDefault();
-    try { b.setPointerCapture(e.pointerId); } catch { /* つかめなくても押している間は動く */ }
-    keys.add(k); b.classList.add('on');
-  };
-  const off = () => { keys.delete(k); b.classList.remove('on'); };
-  b.addEventListener('pointerdown', on);
-  b.addEventListener('pointerup', off);
-  b.addEventListener('pointercancel', off);
-  b.addEventListener('contextmenu', (e) => e.preventDefault());
-}
-$('runBtn').onclick = () => { running = !running; $('runBtn').classList.toggle('on', running); };
+// 走る: PC は Shift、スマホはスティックを大きく倒す。左下の十字キー（▲▼◀▶・走る）はやめた（スティックと同じことができる。利用者 2026-10-30「画面左の透明の操作パネルのようなもの、あれ不要だよね？」）
 
 // ---------- 経路（GTFS-Pathways） ----------
 const GN = data.graph.n;
@@ -2127,11 +2112,11 @@ function frame(now) {
   if (keys.has('ArrowRight')) turn += 1;
   me.yaw += turn * 1.9 * dt;
   const RUN = 7.5, WALK = 1.5; // 走る・歩く速さ（m/秒）。走るは 5.0 の 1.5 倍（利用者「走る速度を1.5倍にしてほしい」）
-  let speed = keys.has('ShiftLeft') || keys.has('ShiftRight') || running ? RUN : WALK;
+  let speed = keys.has('ShiftLeft') || keys.has('ShiftRight') ? RUN : WALK;
   if (stick.id != null) {
     f += stick.vy; s += stick.vx;
     // スティックは大きく倒すと走る
-    speed = running ? RUN : WALK + Math.max(0, Math.hypot(stick.vx, stick.vy) - 0.85) * ((RUN - WALK) / 0.15);
+    speed = WALK + Math.max(0, Math.hypot(stick.vx, stick.vy) - 0.85) * ((RUN - WALK) / 0.15);
   }
   const mag = Math.hypot(f, s);
   if (updateJump(dt)) {
