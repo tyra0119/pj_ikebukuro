@@ -1,6 +1,6 @@
 // 待ち合わせ案内を歩く画面に組み込む。経路は統合データ（data/meet.json）と guide.js で 1 回だけ作り、
 // 同じ経路を「図と手順」（この画面のパネル）と「立体」（床の矢印・案内カード）の両方で見せる。手順を押すとその場所へ立体で飛ぶ。
-// 地上の区間はまだ立体に床が無いので、図と手順だけで案内し、立体は駅・地下街に入る所から歩く。
+// 地上の歩道にも床があるので、出発から立体で歩ける。立体に床の無い点（地下 2 階・データの範囲外）の区間だけ図と手順で案内する。
 
 import { Guide, lvName } from './guide.js';
 import { startRoom, roomId } from './room.js';
@@ -108,10 +108,10 @@ export async function initMeet(A) {
   };
   const shareURL = () => { const u = new URL(location.href); u.hash = ''; u.searchParams.delete('from'); u.searchParams.delete('to'); u.searchParams.set('mto', cur.to.id); u.searchParams.set('pr', cur.pr); if (room) { u.searchParams.delete('mfrom'); u.searchParams.set('room', room.id); u.searchParams.set('role', room.role === 'a' ? 'b' : 'a'); } else u.searchParams.set('mfrom', cur.from.id); return u.href; }; // あいてへのリンク: 待ち合わせ場所と部屋だけ（出発はあいてが選ぶ）。部屋が無いときは自分の案内そのもの
 
-  // ---- 経路 → 立体の道筋。地上（国交省の歩道）の点は歩けないので、駅・地下街に入って床のある最初の点から
+  // ---- 経路 → 立体の道筋。床のある最初の点から（地上の歩道にも床がある。無いのは地下 2 階・データの範囲外）
   function toPts(E) {
     const ids = [E[0].a, ...E.map((e) => e.b)];
-    const pts = ids.map((i, k) => { const n = N(i); const l = WL(n[2]); const e = k ? E[k - 1] : null; return { x: n[0], y: n[1], l: l ?? -1, lv: n[2], mode: e ? (e.mode === 2 ? 2 : e.mode === 4 ? 4 : e.mode === 5 ? 5 : undefined) : undefined, ground: n[6] === 'mlit' || l == null || (n[2] >= 0 && n[6] !== 'jr') }; }); // ground: 階 0 以上は JR の点（ホーム・コンコース）だけ歩ける。地上の歩道・OSM の出入口の点には床が無い
+    const pts = ids.map((i, k) => { const n = N(i); const l = WL(n[2]); const e = k ? E[k - 1] : null; return { x: n[0], y: n[1], l: l ?? -1, lv: n[2], mode: e ? (e.mode === 2 ? 2 : e.mode === 4 ? 4 : e.mode === 5 ? 5 : undefined) : undefined, ground: l == null || !landingAt(n[0], n[1], l, false) }; }); // ground: 立体に床の無い点（地下 2 階、データの範囲外）。地上の歩道には床があるので歩ける（2026-10-30）。以前の注: 階 0 以上は JR の点（ホーム・コンコース）だけ歩ける。地上の歩道・OSM の出入口の点には床が無い
     let first = -1;
     for (let k = 0; k < pts.length; k++) { const p = pts[k]; if (p.ground) continue; if (landingAt(p.x, p.y, p.l, true)) { first = k; break; } }
     return { pts, first };
