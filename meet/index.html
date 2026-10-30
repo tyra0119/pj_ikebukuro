@@ -61,7 +61,7 @@
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const DATA = ['../data/meet.json?v=mvuci6jn', '../data/meet.json?v=mvuci6jn'];
+const DATA = ['../data/meet.json?v=mvucjfmj', '../data/meet.json?v=mvucjfmj'];
 const ORIGIN = { lat: 35.7295, lon: 139.7109 };
 const a = 6378137, e2 = 0.00669438002290, phi = ORIGIN.lat * Math.PI / 180, w = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
 const KX = (Math.PI / 180) * (a / w) * Math.cos(phi), KY = (Math.PI / 180) * ((a * (1 - e2)) / w ** 3);
@@ -244,7 +244,7 @@ function run() {
   const res = dijkstra(from.node, pr, fareOK);
   // JR の改札は何か所もある: いちばん近いものへ
   let goal = to.node; if (to.nodes) goal = to.nodes.reduce((b, i) => (res.dist[i] < res.dist[b] ? i : b), to.nodes[0]);
-  if (res.dist[goal] === Infinity) { $('result').innerHTML = '<div class="small">この条件では道が見つかりません。</div>'; drawRoute(null); return; }
+  if (res.dist[goal] === Infinity) { $('result').innerHTML = `<div class="small">この条件では道が見つかりません。${pr === 'ev' ? '出口の階段やエスカレーターを使わない道が無いようです（出口のエレベーターの有無はデータにありません）。条件を「標準」にすると道が出ます。' : ''}</div>`; drawRoute(null); return; }
   const E = pathTo(res, goal);
   route = { from, to, E, ...describe(E, from, to) };
   renderResult(res);
