@@ -5,6 +5,9 @@ export const WALK = 0, STAIR = 2, ESC = 4, EV = 5, GATE = 6;
 const LEVEL_NAME = { 2: '3階', 1.5: '中2階', 1: '2階', 0.5: '中1階', 0: '地上', '-0.5': '地下中1階', '-1': '地下1階', '-2': '地下2階', '-3': '地下3階', '-4': '地下4階' };
 export const lvName = (l) => LEVEL_NAME[l] || (l < 0 ? `地下${-l}階` : `${l + 1}階`);
 
+const DIR8 = ['北', '北東', '東', '南東', '南', '南西', '西', '北西'];
+export const compass = (dx, dy) => DIR8[Math.round(((Math.atan2(dx, dy) * 180) / Math.PI + 360) / 45) % 8];
+
 export class Guide {
   constructor(D) {
     this.D = D;
@@ -91,7 +94,7 @@ export class Guide {
     for (let k = 0; k < out.length; k++) {
       const s = out[k];
       if (s.kind === 'walk' && s.len < 10 && out.length > 1) {
-        if (k < out.length - 1) { out[k + 1].lead = (s.lead || []).concat(s.edges, out[k + 1].lead || []); continue; }
+        if (k < out.length - 1) { out[k + 1].lead = (s.lead || []).concat(s.edges, out[k + 1].lead || []); if (out[k + 1].turn === 'back') out[k + 1].turn = undefined; continue; }
         const p = res[res.length - 1]; if (p) { p.tail = (p.tail || []).concat(s.edges); continue; }
       }
       res.push(s);
@@ -142,7 +145,19 @@ export class Guide {
         const jrOnly = s.edges.every((e) => e.src === 1);
         const prevIcon = steps.length ? steps[steps.length - 1].icon : '';
         const same = (s.turn === 'right' && prevIcon === 'turnR') || (s.turn === 'left' && prevIcon === 'turnL');
-        const lead = !s.turn ? '' : s.turn === 'right' ? (same ? 'さらに右に曲がって、' : '右に曲がって、') : s.turn === 'left' ? (same ? 'さらに左に曲がって、' : '左に曲がって、') : prevIcon === 'uturn' ? 'さらに折り返して、' : '折り返して、';
+        let lead = !s.turn ? '' : s.turn === 'right' ? (same ? 'さらに右に曲がって、' : '右に曲がって、') : s.turn === 'left' ? (same ? 'さらに左に曲がって、' : '左に曲がって、') : prevIcon === 'uturn' ? 'さらに折り返して、' : '折り返して、';
+        if (s.turn === 'back') {
+          // 折り返す地点（この手順の始まりの点）の目印。無ければ、前の手順の終わりの約 15 m の進む方角
+          const tm = this.markNear(s.from, 12, 'gmrso', used) || (ground ? this.markNear(s.from, 40, 'b', used) : null);
+          const prevStep = steps[steps.length - 1], ps = prevStep && prevStep.seg && prevStep.seg.kind === 'walk' ? prevStep.seg : null;
+          let dir = null;
+          if (ps) { let dx = 0, dy = 0, acc = 0; for (let k = ps.edges.length - 1; k >= 0 && acc < 15; k--) { const A = N(ps.edges[k].a), B = N(ps.edges[k].b); dx += B[0] - A[0]; dy += B[1] - A[1]; acc += ps.edges[k].len; } if (Math.hypot(dx, dy) > 3) dir = compass(dx, dy); }
+          if (tm) { used[tm[3]] = 1; lead = `「${tm[3]}」の所で折り返して、`; }
+          else if (dir) lead = `いったん${dir}へ進んだ先で折り返して、`;
+          else if (prevStep && prevStep.seg && prevStep.seg.kind === 'vert') lead = `${prevStep.icon === 'ev' ? 'エレベーターを出た' : prevStep.icon === 'esc' ? 'エスカレーターを' + (prevStep.seg.l1 > prevStep.seg.l0 ? '上った' : '下りた') : '階段を' + (prevStep.seg.l1 > prevStep.seg.l0 ? '上った' : '下りた')}所で折り返して、`;
+          else if (prevStep && prevStep.seg && prevStep.seg.kind === 'gate') lead = '改札を通った所で折り返して、';
+          if (prevStep && ps) prevStep.detail = (prevStep.detail || '') + (tm ? `「${tm[3]}」の所で折り返します。` : 'この先で折り返します。');
+        }
         const names = [...new Set(s.edges.map((e) => e.name).filter(Boolean))];
         const where = jrOnly ? '駅の中の通路を' : ground ? '地上の歩道を' : names.length ? `${lvName(s.l0)}の通路（${names[0]}）を` : `${lvName(s.l0)}の通路を`;
         let d = s.edges.some((e) => e.mode === STAIR || e.mode === ESC) ? '途中に数段の段差があります。' : '';
