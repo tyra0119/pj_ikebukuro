@@ -1,0 +1,328 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>池袋 待ち合わせ案内</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+<style>
+  :root { --acc: #2b6cb0; --bg: #fff; --fg: #222; --mut: #666; --line: #e5e5e5; }
+  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; font-size: 14px; color: var(--fg); background: var(--bg); }
+  #wrap { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
+  #side { overflow: auto; padding: 12px 14px; border-right: 1px solid var(--line); box-sizing: border-box; }
+  #map { height: 100%; background: #f4f4f2; }
+  h1 { font-size: 17px; margin: 0 0 8px; }
+  h2 { font-size: 14px; margin: 14px 0 6px; }
+  label.f { display: block; margin: 6px 0 2px; color: var(--mut); font-size: 12px; }
+  select, input[type=text] { width: 100%; padding: 6px 8px; font-size: 14px; border: 1px solid #bbb; border-radius: 6px; box-sizing: border-box; background: #fff; }
+  .row { display: flex; gap: 6px; align-items: center; }
+  .row > * { flex: 1; }
+  button { padding: 7px 12px; border: 1px solid #bbb; background: #fafafa; border-radius: 6px; cursor: pointer; font-size: 14px; }
+  button.p { background: var(--acc); color: #fff; border-color: var(--acc); }
+  button.s { padding: 3px 8px; font-size: 12px; }
+  .sum { background: #eef4ff; border-radius: 8px; padding: 8px 10px; margin: 8px 0; line-height: 1.6; }
+  ol.steps { list-style: none; padding: 0; margin: 0; }
+  ol.steps li { display: grid; grid-template-columns: 34px 1fr; gap: 8px; padding: 8px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
+  ol.steps li.sel { background: #fff7d6; }
+  ol.steps .ic { width: 30px; height: 30px; border-radius: 15px; background: #ddd; color: #222; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
+  ol.steps .ic.walk { background: #cfe3ff; } ol.steps .ic.turnL, ol.steps .ic.turnR, ol.steps .ic.uturn { background: #ffe1b3; } ol.steps .ic.stair, ol.steps .ic.esc, ol.steps .ic.ev { background: #d6f5d6; } ol.steps .ic.gate { background: #f9d0d0; } ol.steps .ic.start, ol.steps .ic.goal { background: #333; color: #fff; }
+  ol.steps .t { font-weight: 600; }
+  ol.steps .d { color: var(--mut); font-size: 12.5px; margin-top: 2px; line-height: 1.5; }
+  .exits button { margin: 2px 4px 2px 0; }
+  .small { color: var(--mut); font-size: 12px; line-height: 1.5; }
+  .share { word-break: break-all; font-size: 12px; background: #f6f6f6; padding: 6px; border-radius: 6px; }
+  .lv { position: absolute; z-index: 1000; top: 10px; right: 10px; background: #fff; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3); padding: 4px; }
+  .lv button { display: block; width: 100%; margin: 2px 0; padding: 4px 10px; }
+  .lv button.on { background: var(--acc); color: #fff; border-color: var(--acc); }
+  .leaflet-tooltip.stepno { background: #333; color: #fff; border: 0; font-weight: 700; padding: 1px 6px; }
+  @media (max-width: 760px) { #wrap { grid-template-columns: 1fr; grid-template-rows: 1fr 45vh; } #side { border-right: 0; border-bottom: 1px solid var(--line); } }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="side">
+    <h1>池袋 待ち合わせ案内</h1>
+    <div class="small">JR の駅構内・地下街（PLATEAU）・OpenStreetMap の地下通路・国土交通省の歩道を 1 つにつないだ経路網で、地下の待ち合わせ場所への道順を案内します。</div>
+    <label class="f">出発（地上の場所・出口・待ち合わせ場所）</label>
+    <select id="from"></select>
+    <label class="f">待ち合わせ場所</label>
+    <input type="text" id="q" placeholder="名前で探す（改札・地下街・店…）">
+    <select id="to" size="6"></select>
+    <div class="row" style="margin-top:8px">
+      <select id="pr"><option value="std">標準（いちばん早い）</option><option value="stair">階段を使う</option><option value="esc">エスカレーターを使う</option><option value="ev">エレベーターを使う（段差なし）</option></select>
+      <button class="p" id="go">案内</button>
+    </div>
+    <div class="row" style="margin-top:6px"><button class="s" id="swap">出発と待ち合わせ場所を入れ替え</button><button class="s" id="here">現在地から</button></div>
+    <div id="result"></div>
+    <h2>出典</h2>
+    <div class="small" id="credits"></div>
+  </div>
+  <div style="position:relative"><div id="map"></div><div class="lv" id="lv"></div></div>
+</div>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<script>
+const DATA = ['../data/meet.json?v=mvuch29p', '../data/meet.json?v=mvuch29p'];
+const ORIGIN = { lat: 35.7295, lon: 139.7109 };
+const a = 6378137, e2 = 0.00669438002290, phi = ORIGIN.lat * Math.PI / 180, w = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
+const KX = (Math.PI / 180) * (a / w) * Math.cos(phi), KY = (Math.PI / 180) * ((a * (1 - e2)) / w ** 3);
+const LL = (x, y) => [ORIGIN.lat + y / KY, ORIGIN.lon + x / KX];
+const XY = (lat, lon) => [(lon - ORIGIN.lon) * KX, (lat - ORIGIN.lat) * KY];
+const $ = (id) => document.getElementById(id);
+const WALK = 0, STAIR = 2, ESC = 4, EV = 5, GATE = 6;
+const LEVEL_NAME = { 2: '3階', 1.5: '中2階', 1: '2階', 0.5: '中1階', 0: '地上', '-0.5': '地下中1階', '-1': '地下1階', '-2': '地下2階', '-3': '地下3階', '-4': '地下4階' };
+const lvName = (l) => LEVEL_NAME[l] || (l < 0 ? `地下${-l}階` : `${l + 1}階`);
+const WALKLINK = (name) => `../walk/?st=ikebukuro`;
+
+let D, adj, curLevel = -1, route = null, layers = L.layerGroup(), stepLayers = [];
+const map = L.map('map', { preferCanvas: true }).setView([ORIGIN.lat, ORIGIN.lon], 17);
+L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19, opacity: 0.6, attribution: '© OpenStreetMap contributors' }).addTo(map);
+L.control.scale({ imperial: false }).addTo(map);
+layers.addTo(map);
+
+// ---------- 経路探索 ----------
+function buildAdj() {
+  adj = D.nodes.map(() => []);
+  D.links.forEach((l, li) => { adj[l[0]].push([l[1], li]); adj[l[1]].push([l[0], li]); });
+}
+// 秒: 歩き 1.25 m/s、階段 0.5 m/s + 3 秒、エスカレーター 0.6 m/s + 5 秒、エレベーター 50 秒、改札 6 秒。推定の線は 1.5 倍 + 15 秒（Machiawase と同じ）
+function cost(l, pr, fareOK) {
+  const [, , len, mode, , guess, cross] = l;
+  let s;
+  if (mode === EV) s = 50; else if (mode === ESC) s = len / 0.6 + 5; else if (mode === STAIR) s = len / 0.5 + 3; else if (mode === GATE) s = 6; else s = len / 1.25;
+  if (pr === 'ev' && (mode === STAIR || mode === ESC)) return Infinity;
+  if (pr === 'stair' && (mode === ESC || mode === EV)) s *= 3;
+  if (pr === 'esc' && (mode === STAIR || mode === EV)) s *= 3;
+  if (guess) { if (pr === 'ev' && D.nodes[l[0]][2] !== D.nodes[l[1]][2]) return Infinity; s = s * 1.5 + 15; }
+  if (cross) s += 10;
+  if (mode === GATE && !fareOK) s += 600; // 改札の中を通り抜ける近道は避ける（運賃がかかる）
+  return s;
+}
+function dijkstra(src, pr, fareOK) {
+  const n = D.nodes.length, dist = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1), prevL = new Int32Array(n).fill(-1);
+  const heap = [[0, src]]; dist[src] = 0;
+  const push = (v) => { heap.push(v); let i = heap.length - 1; while (i > 0) { const p = (i - 1) >> 1; if (heap[p][0] <= heap[i][0]) break; [heap[p], heap[i]] = [heap[i], heap[p]]; i = p; } };
+  const pop = () => { const top = heap[0], last = heap.pop(); if (heap.length) { heap[0] = last; let i = 0; for (;;) { const l = 2 * i + 1, r = l + 1; let m = i; if (l < heap.length && heap[l][0] < heap[m][0]) m = l; if (r < heap.length && heap[r][0] < heap[m][0]) m = r; if (m === i) break; [heap[m], heap[i]] = [heap[i], heap[m]]; i = m; } } return top; };
+  while (heap.length) {
+    const [d, u] = pop(); if (d > dist[u]) continue;
+    for (const [v, li] of adj[u]) { const c = cost(D.links[li], pr, fareOK); if (c === Infinity) continue; const nd = d + c; if (nd < dist[v]) { dist[v] = nd; prev[v] = u; prevL[v] = li; push([nd, v]); } }
+  }
+  return { dist, prev, prevL };
+}
+function pathTo(res, t) { const edges = []; let v = t; while (res.prev[v] >= 0) { const li = res.prevL[v], l = D.links[li]; const u = res.prev[v]; edges.unshift({ a: u, b: v, li, len: l[2], mode: l[3], src: l[4], guess: l[5], cross: l[6], name: l[7] }); v = u; } return edges; }
+
+// ---------- 手順（Machiawase の規則） ----------
+const N = (i) => D.nodes[i];
+const isVert = (e) => N(e.a)[2] !== N(e.b)[2] || e.mode === STAIR || e.mode === ESC || e.mode === EV;
+function segment(E) {
+  const segs = []; let i = 0;
+  while (i < E.length) {
+    if (isVert(E[i])) { const v = { kind: 'vert', mode: E[i].mode, edges: [] }; const m = E[i].mode; while (i < E.length && isVert(E[i]) && E[i].mode === m) v.edges.push(E[i++]); segs.push(v); }
+    else if (E[i].mode === GATE) segs.push({ kind: 'gate', edges: [E[i++]] });
+    else { const wk = { kind: 'walk', edges: [] }; while (i < E.length && !isVert(E[i]) && E[i].mode !== GATE) wk.edges.push(E[i++]); segs.push(wk); }
+  }
+  // 曲がり角で分ける: 手前約 25 m と先約 30 m の向きが 60 度以上違い、前後とも 30 m 以上。折り返し（135 度以上）は前後 4 m 以上
+  const out = [];
+  for (const s of segs) {
+    if (s.kind !== 'walk') { out.push(s); continue; }
+    let cur = { kind: 'walk', edges: [] }, hist = [], run = 0;
+    const recent = (win) => { let sx = 0, sy = 0, acc = 0; for (let k = hist.length - 1; k >= 0 && acc < win; k--) { sx += hist[k][0]; sy += hist[k][1]; acc += hist[k][2]; } const l = Math.hypot(sx, sy); return l > 3 ? [sx / l, sy / l] : null; };
+    s.edges.forEach((e, ei) => {
+      const A = N(e.a), B = N(e.b), dx = B[0] - A[0], dy = B[1] - A[1], Lg = Math.hypot(dx, dy);
+      const prev = recent(12);
+      if (Lg > 0.8 && prev) {
+        const cos = (dx * prev[0] + dy * prev[1]) / Lg;
+        const rest = s.edges.slice(ei).reduce((t, x) => t + x.len, 0);
+        let turnAhead = false, p25 = null, ax2 = 0, ay2 = 0, la2 = 0;
+        if (run >= 30 && rest >= 30) {
+          p25 = recent(25); let acc = 0;
+          for (let q = ei; q < s.edges.length && acc < 30; q++) { const qa = N(s.edges[q].a), qb = N(s.edges[q].b); ax2 += qb[0] - qa[0]; ay2 += qb[1] - qa[1]; acc += s.edges[q].len; }
+          la2 = Math.hypot(ax2, ay2);
+          turnAhead = !!p25 && la2 > 10 && (ax2 * p25[0] + ay2 * p25[1]) / la2 < 0.5;
+        }
+        const uturn = cos < -0.707 && run >= 4 && rest >= 4;
+        if (uturn || turnAhead) {
+          out.push(cur);
+          let c2 = cos, cross = prev[0] * dy - prev[1] * dx;
+          if (turnAhead && !uturn) { c2 = (ax2 * p25[0] + ay2 * p25[1]) / la2; cross = p25[0] * ay2 - p25[1] * ax2; }
+          cur = { kind: 'walk', edges: [], turn: c2 < -0.7 ? 'back' : cross > 0 ? 'left' : 'right' };
+          run = 0; hist = [];
+        }
+      }
+      if (Lg > 0.3) hist.push([dx, dy, Lg]);
+      cur.edges.push(e); run += e.len;
+    });
+    out.push(cur);
+  }
+  for (const s of out) { s.from = s.edges[0].a; s.to = s.edges[s.edges.length - 1].b; s.l0 = N(s.from)[2]; s.l1 = N(s.to)[2]; s.len = s.edges.reduce((t, e) => t + e.len, 0); }
+  // 数 m の歩きは単独の手順にしない（次の手順に含める）
+  const res = [];
+  for (let k = 0; k < out.length; k++) { const s = out[k]; if (s.kind === 'walk' && s.len < 6 && !s.turn && k > 0 && k < out.length - 1) { out[k + 1].lead = (s.lead || []).concat(s.edges, out[k + 1].lead || []); continue; } res.push(s); }
+  return res;
+}
+const secs = (s) => s.kind === 'walk' ? s.len / 1.25 : s.kind === 'gate' ? 6 : s.mode === EV ? 50 : s.mode === ESC ? s.len / 0.6 + 5 : s.len / 0.5 + 3;
+function bendsIn(s) { // 15 m ごとに区切り、50 度以上向きが変わる所（3 つまで）
+  const ch = []; let cx = 0, cy = 0, acc = 0;
+  for (const e of s.edges) { const A = N(e.a), B = N(e.b); cx += B[0] - A[0]; cy += B[1] - A[1]; acc += e.len; if (acc >= 15) { ch.push([cx, cy]); cx = cy = acc = 0; } }
+  if (acc >= 5) ch.push([cx, cy]);
+  const words = [];
+  for (let k = 1; k < ch.length && words.length < 3; k++) { const [ax, ay] = ch[k - 1], [bx, by] = ch[k], la = Math.hypot(ax, ay), lb = Math.hypot(bx, by); if (la < 1 || lb < 1) continue; const cos = (ax * bx + ay * by) / (la * lb), cr = ax * by - ay * bx; if (cos < 0.64) words.push(cos < -0.7 ? '折り返すよう' : cr > 0 ? '左' : '右'); }
+  return words;
+}
+function markNear(i, radius, kinds, used) { const n = N(i); let best = null, bd = radius; for (const m of D.marks) { if (!kinds.includes(m[4]) || used[m[3]] || m[2] !== n[2]) continue; const d = Math.hypot(m[0] - n[0], m[1] - n[1]); if (d < bd) { bd = d; best = m; } } return best; }
+function toiletNear(s) { for (const e of s.edges) { const A = N(e.a), B = N(e.b); for (const t of D.toilets) { if (t[2] !== A[2]) continue; const dx = B[0] - A[0], dy = B[1] - A[1], L2 = dx * dx + dy * dy, u = L2 ? Math.max(0, Math.min(1, ((t[0] - A[0]) * dx + (t[1] - A[1]) * dy) / L2)) : 0; if (Math.hypot(A[0] + dx * u - t[0], A[1] + dy * u - t[1]) <= 10) return t; } } return null; }
+function estPart(s) { let n = 0, len = 0, first = -1, last = -1; s.edges.forEach((e, k) => { if (e.guess) { len += e.len; if (first < 0) first = k; last = k; n++; } }); if (!n) return null; return { len, where: first === 0 ? 0 : last === s.edges.length - 1 ? 2 : 1 }; }
+
+function describe(E, from, to) {
+  const segs = segment(E), steps = [];
+  let total = 0, inFare = false; const counts = { 2: 0, 4: 0, 5: 0 }, used = {};
+  if (to.name) { used[to.name] = 1; used[to.name.replace(/の?前$/, '')] = 1; }
+  steps.push({ icon: 'start', title: `${from.name}から出発`, detail: from.type === 'place' ? `地上の「${from.name}」が出発地点です。` : from.type === 'exit' ? `地上の「${from.name}」の前が出発地点です。` : from.note || '', seg: null });
+  let underLen = 0;
+  for (const s of segs) {
+    total += secs(s);
+    if (s.kind === 'walk') {
+      const m = Math.max(5, Math.round(s.len / 5) * 5), ground = s.l0 === 0 && s.l1 === 0;
+      if (!ground) underLen += s.len;
+      const jrOnly = s.edges.every((e) => e.src === 1);
+      const prevIcon = steps.length ? steps[steps.length - 1].icon : '';
+      const same = (s.turn === 'right' && prevIcon === 'turnR') || (s.turn === 'left' && prevIcon === 'turnL');
+      const lead = !s.turn ? '' : s.turn === 'right' ? (same ? 'さらに右に曲がって、' : '右に曲がって、') : s.turn === 'left' ? (same ? 'さらに左に曲がって、' : '左に曲がって、') : prevIcon === 'uturn' ? 'さらに折り返して、' : '折り返して、';
+      const names = [...new Set(s.edges.map((e) => e.name).filter(Boolean))];
+      const where = jrOnly ? '駅の中の通路を' : ground ? '地上の歩道を' : names.length ? `${lvName(s.l0)}の通路（${names[0]}）を` : `${lvName(s.l0)}の通路を`;
+      let d = '';
+      let nx = 0, was = false; for (const e of s.edges) { if (e.cross && !was) nx++; was = !!e.cross; } if (nx) d += `途中で横断歩道を${nx}回渡ります。`;
+      const wc = toiletNear(s); if (wc) d += `そばにトイレがあります${wc[3] === '車いす' ? '（車いす対応）' : wc[3] === 'JR' ? '（JR の駅の中）' : ''}。`;
+      const bends = bendsIn(s); if (bends.length) d += `途中で${bends.join('、')}に曲がります。`;
+      const est = estPart(s); if (est) d += `${est.where === 0 ? 'はじめの' : est.where === 2 ? '終わりの' : '途中の'}約${Math.max(5, Math.round(est.len / 5) * 5)}mは、地図データに通路の線が無いので、近くの通路をまっすぐ結んで案内しています。実際の通り道は少し違うかもしれません。`;
+      const mk = !ground && markNear(s.to, 15, 'gmrso', used); if (mk) { used[mk[3]] = 1; d += `「${mk[3]}」のそばまで進みます。`; }
+      steps.push({ icon: !s.turn ? 'walk' : s.turn === 'right' ? 'turnR' : s.turn === 'left' ? 'turnL' : 'uturn', title: `${lead}${where}約${m}m 進む`, detail: d, seg: s });
+    } else if (s.kind === 'gate') {
+      const enter = !inFare; inFare = !inFare;
+      const g = markNear(s.to, 20, 'g', {}) || markNear(s.from, 20, 'g', {});
+      steps.push({ icon: 'gate', title: enter ? `改札に入る${g ? '（' + g[3] + '）' : ''}` : `改札を出る${g ? '（' + g[3] + '）' : ''}`, detail: enter ? 'ICカードやきっぷを用意して、改札を通ります。' : 'ICカードやきっぷで、改札を通って外に出ます。', seg: s });
+    } else {
+      counts[s.mode] = (counts[s.mode] || 0) + 1;
+      const up = s.l1 > s.l0, word = { 2: '階段', 4: 'エスカレーター', 5: 'エレベーター' }[s.mode] || '階段';
+      let title = s.mode === EV ? `エレベーターで${lvName(s.l1)}へ` : `${up ? '上り' : '下り'}${word}で${lvName(s.l1)}へ`, detail = `${lvName(s.l0)} → ${lvName(s.l1)}`;
+      let exitAt = null, exitNode = -1; for (const e of s.edges) for (const ni of [e.a, e.b]) if (exitAt == null && N(ni)[4] === 2) { exitAt = N(ni)[5] || '番号のない出口'; exitNode = ni; }
+      if (exitAt && (s.l0 === 0 || s.l1 === 0)) {
+        let en = exitAt; const bm = exitNode >= 0 && markNear(exitNode, 90, 'b', used); if (bm) { used[bm[3]] = 1; en = `${bm[3]}のそばの${en}`; }
+        title = `${en}${up ? 'から地上へ出る' : 'から' + lvName(s.l1) + 'へ下りる'}`;
+        detail = s.mode === EV ? '車いすで通れる出口です。' : s.edges.some((e) => e.guess) ? '出口の階段の位置はデータに無いので、近くの通路と結んで案内しています。' : '出口の階段です。エスカレーター・エレベーターがあるかはデータにありません。';
+      } else if (s.edges.some((e) => e.guess)) detail += '。地図データに階段の線が無いので、近くの通路と結んで案内しています。実際の上り下りの場所は少し違うかもしれません';
+      else if (s.edges.every((e) => e.src === 1)) detail += '（JR東日本の駅構内データ）';
+      steps.push({ icon: s.mode === EV ? 'ev' : s.mode === ESC ? 'esc' : 'stair', title, detail, seg: s });
+    }
+  }
+  const near = D.marks.filter((m) => m[2] === N(to.node)[2] && !used[m[3]] && Math.hypot(m[0] - N(to.node)[0], m[1] - N(to.node)[1]) <= 25).sort((p, q) => Math.hypot(p[0] - N(to.node)[0], p[1] - N(to.node)[1]) - Math.hypot(q[0] - N(to.node)[0], q[1] - N(to.node)[1])).slice(0, 3);
+  steps.push({ icon: 'goal', title: `${to.name}に到着`, detail: (to.note || '') + (near.length ? `近くの目印: ${near.map((m) => m[3]).join('・')}` : ''), seg: null });
+  return { steps, total, counts, underLen, segs };
+}
+
+// ---------- 画面 ----------
+const ICON = { start: '出', goal: '着', walk: '→', turnL: '↰', turnR: '↱', uturn: '↩', stair: '階', esc: 'エ', ev: 'EV', gate: '改' };
+let fromList = [], toList = [];
+function fillFrom() {
+  fromList = [...D.places.map((p) => ({ ...p, type: 'place', id: 'place:' + p.name })), ...D.exits.map((e) => ({ ...e, type: 'exit', id: 'exit:' + e.name })), ...D.spots.map((s) => ({ ...s, type: 'spot', id: 'spot:' + s.key }))];
+  const sel = $('from'); sel.innerHTML = '';
+  const grp = (label, items) => { const g = document.createElement('optgroup'); g.label = label; for (const it of items) { const o = document.createElement('option'); o.value = it.id; o.textContent = it.name + (it.type === 'spot' ? `（${lvName(it.level)}）` : ''); g.appendChild(o); } sel.appendChild(g); };
+  grp('地上の場所', fromList.filter((x) => x.type === 'place')); grp('出口の前（地上）', fromList.filter((x) => x.type === 'exit')); grp('待ち合わせ場所', fromList.filter((x) => x.type === 'spot'));
+}
+function fillTo(q = '') {
+  const sel = $('to'); const keep = sel.value; sel.innerHTML = '';
+  toList = D.spots.map((s) => ({ ...s, type: 'spot', id: 'spot:' + s.key })).filter((s) => !q || s.name.includes(q) || s.kind.includes(q));
+  for (const s of toList) { const o = document.createElement('option'); o.value = s.id; o.textContent = `［${s.kind}］${s.name}（${lvName(s.level)}）`; sel.appendChild(o); }
+  if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
+}
+const findItem = (id) => fromList.find((x) => x.id === id) || toList.find((x) => x.id === id) || (id && id.startsWith('spot:') ? D.spots.map((s) => ({ ...s, type: 'spot', id: 'spot:' + s.key })).find((x) => x.id === id) : null);
+
+function run() {
+  const from = findItem($('from').value), to = findItem($('to').value), pr = $('pr').value;
+  if (!from || !to) { $('result').innerHTML = '<div class="small">出発と待ち合わせ場所を選んでください。</div>'; return; }
+  const fareOK = false;
+  const res = dijkstra(from.node, pr, fareOK);
+  // JR の改札は何か所もある: いちばん近いものへ
+  let goal = to.node; if (to.nodes) goal = to.nodes.reduce((b, i) => (res.dist[i] < res.dist[b] ? i : b), to.nodes[0]);
+  if (res.dist[goal] === Infinity) { $('result').innerHTML = '<div class="small">この条件では道が見つかりません。</div>'; drawRoute(null); return; }
+  const E = pathTo(res, goal);
+  route = { from, to, E, ...describe(E, from, to) };
+  renderResult(res);
+  drawRoute(route);
+  const u = new URL(location.href); u.searchParams.set('from', from.id); u.searchParams.set('to', to.id); u.searchParams.set('pr', pr); history.replaceState(null, '', u);
+}
+function renderResult(res) {
+  const r = route, min = Math.max(1, Math.round(r.total / 60));
+  const stairs = r.counts[2] || 0, esc = r.counts[4] || 0, ev = r.counts[5] || 0;
+  const len = r.E.reduce((t, e) => t + e.len, 0);
+  let h = `<div class="sum"><b>約${min}分</b>・道のり約${Math.round(len / 10) * 10}m（地下を歩くのは約${Math.round(r.underLen / 10) * 10}m）<br>${stairs ? `階段 ${stairs}回` : '階段なし'}${esc ? `・エスカレーター ${esc}回` : ''}${ev ? `・エレベーター ${ev}回` : ''}<br>待ち合わせ場所: ${r.to.kind}・${r.to.name}（${lvName(r.to.level)}）</div>`;
+  h += '<ol class="steps">' + r.steps.map((s, i) => `<li data-i="${i}"><div class="ic ${s.icon}">${ICON[s.icon]}</div><div><div class="t">${i}. ${s.title}</div>${s.detail ? `<div class="d">${s.detail}</div>` : ''}</div></li>`).join('') + '</ol>';
+  // 近い出口: 待ち合わせ場所から出口ごとの道のり（短い順に 4 つ）
+  const back = dijkstra(r.to.node, $('pr').value, false);
+  const ex = D.exits.map((e) => ({ e, d: back.dist[e.node] })).filter((x) => x.d < Infinity).sort((p, q) => p.d - q.d).slice(0, 4);
+  if (ex.length) h += `<h2>待ち合わせ場所に近い出口</h2><div class="exits">${ex.map((x) => `<button class="s" data-exit="exit:${x.e.name}">${x.e.name}（約${Math.max(1, Math.round(x.d / 60))}分）</button>`).join('')}</div>`;
+  const u = new URL(location.href); u.searchParams.set('from', r.from.id); u.searchParams.set('to', r.to.id); u.searchParams.set('pr', $('pr').value);
+  h += `<h2>あいてに送る</h2><div class="share" id="share">${u.href}</div><div class="row" style="margin-top:4px"><button class="s" id="copy">リンクをコピー</button><button class="s" id="copyText">案内文をコピー</button></div>`;
+  const wname = (it) => (D.walkDest.includes(it.name) ? it.name : it.type === 'spot' && D.walkDest.includes(it.name.replace(/^JR /, '').replace(/の前$/, '')) ? it.name.replace(/^JR /, '').replace(/の前$/, '') : null);
+  const wf = wname(r.from), wt = wname(r.to);
+  if (wt) h += `<h2>立体で歩く</h2><div class="small"><a href="../walk/?st=ikebukuro&to=${encodeURIComponent(wt)}${wf ? '&from=' + encodeURIComponent(wf) : ''}" target="_blank" rel="noopener">人の目線で「${wt}」まで歩く（別の画面）</a>${wf ? '' : '。出発は駅の中の改札からになります（地上の場所・出口は歩く画面にありません）'}</div>`;
+  $('result').innerHTML = h;
+  $('result').querySelectorAll('li').forEach((li) => li.onclick = () => selectStep(+li.dataset.i));
+  $('result').querySelectorAll('[data-exit]').forEach((b) => b.onclick = () => { $('from').value = b.dataset.exit; run(); });
+  $('copy').onclick = () => navigator.clipboard.writeText(u.href);
+  $('copyText').onclick = () => navigator.clipboard.writeText(`${r.from.name} → ${r.to.name}（約${min}分）\n` + r.steps.map((s, i) => `${i}. ${s.title}${s.detail ? '　' + s.detail : ''}`).join('\n') + '\n' + u.href + '\n© OpenStreetMap contributors（ODbL）');
+}
+const LCOL = { 1: '#8e44ad', 0: '#2ca02c', '-0.5': '#17becf', '-1': '#1f77b4', '-2': '#d62728', '-3': '#e377c2', '-4': '#7f7f7f' };
+function drawRoute(r) {
+  layers.clearLayers(); stepLayers = [];
+  if (!r) return;
+  const bounds = [];
+  r.steps.forEach((s, i) => {
+    if (!s.seg) { const n = N(i === 0 ? r.from.node : r.to.node); const m = L.circleMarker(LL(n[0], n[1]), { radius: 8, color: '#333', fillColor: i === 0 ? '#fff' : '#ffeb3b', fillOpacity: 1, weight: 2 }).bindTooltip(i === 0 ? '出発' : '到着', { permanent: true, direction: 'top', className: 'stepno' }); layers.addLayer(m); bounds.push(LL(n[0], n[1])); stepLayers.push([m]); return; }
+    const ed = [...(s.seg.lead || []), ...s.seg.edges];
+    const pts = [LL(N(ed[0].a)[0], N(ed[0].a)[1]), ...ed.map((e) => LL(N(e.b)[0], N(e.b)[1]))];
+    pts.forEach((p) => bounds.push(p));
+    const lv = N(s.seg.from)[2], col = LCOL[lv] || '#555';
+    const dim = curLevel !== 'all' && lv !== curLevel && N(s.seg.to)[2] !== curLevel;
+    const pl = L.polyline(pts, { color: col, weight: dim ? 3 : 6, opacity: dim ? 0.35 : 0.9, dashArray: s.seg.kind === 'vert' ? '6 6' : s.seg.edges.some((e) => e.guess) ? '2 6' : null });
+    const n0 = N(s.seg.from); const m = L.circleMarker(LL(n0[0], n0[1]), { radius: 9, color: col, fillColor: '#fff', fillOpacity: 1, weight: 2 }).bindTooltip(String(i), { permanent: true, direction: 'center', className: 'stepno' });
+    pl.on('click', () => selectStep(i)); m.on('click', () => selectStep(i));
+    layers.addLayer(pl); layers.addLayer(m); stepLayers.push([pl, m]);
+  });
+  for (const s of D.spots) if (s.id === r.to.id || ('spot:' + s.key) === r.to.id) {} // 到着は上で描いた
+  if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
+}
+function selectStep(i) {
+  const s = route.steps[i];
+  document.querySelectorAll('ol.steps li').forEach((li) => li.classList.toggle('sel', +li.dataset.i === i));
+  if (s.seg) { const lv = N(s.seg.from)[2]; if (lv !== curLevel) { curLevel = lv; renderLv(); drawRoute(route); } const ed = s.seg.edges; map.fitBounds(ed.map((e) => LL(N(e.b)[0], N(e.b)[1])).concat([LL(N(ed[0].a)[0], N(ed[0].a)[1])]), { padding: [40, 40], maxZoom: 20 }); }
+  else { const n = N(i === 0 ? route.from.node : route.to.node); if (n[2] !== curLevel) { curLevel = n[2]; renderLv(); drawRoute(route); } map.setView(LL(n[0], n[1]), 19); }
+  document.querySelectorAll('ol.steps li')[i]?.scrollIntoView({ block: 'nearest' });
+}
+function renderLv() {
+  const el = $('lv'); el.innerHTML = '';
+  for (const [lv, name] of [[1, '2F'], [0, '地上'], [-1, 'B1'], [-2, 'B2'], ['all', '全部']]) { const b = document.createElement('button'); b.textContent = name; b.className = curLevel === lv ? 'on' : ''; b.onclick = () => { curLevel = lv; renderLv(); drawRoute(route); drawSpots(); }; el.appendChild(b); }
+}
+let spotLayer = L.layerGroup().addTo(map);
+function drawSpots() {
+  spotLayer.clearLayers();
+  for (const s of D.spots) { if (curLevel !== 'all' && s.level !== curLevel) continue; const m = L.circleMarker(LL(s.x, s.y), { radius: 4, color: '#8e44ad', fillColor: '#8e44ad', fillOpacity: 0.6, weight: 1 }).bindTooltip(s.name); m.on('click', () => { $('q').value = ''; fillTo(''); $('to').value = 'spot:' + s.key; run(); }); spotLayer.addLayer(m); }
+  for (const e of D.exits) { if (curLevel !== 'all' && e.level !== curLevel) continue; const m = L.circleMarker(LL(e.x, e.y), { radius: 4, color: '#2ca02c', fillColor: '#fff', fillOpacity: 1, weight: 2 }).bindTooltip(e.name); m.on('click', () => { $('from').value = 'exit:' + e.name; run(); }); spotLayer.addLayer(m); }
+}
+
+fetch(DATA[0]).then((r) => (r.ok ? r.json() : fetch(DATA[1]).then((r2) => r2.json()))).then((d) => {
+  D = d; buildAdj(); fillFrom(); fillTo(); renderLv(); drawSpots();
+  $('credits').textContent = D.credits.join(' ／ ');
+  const u = new URL(location.href);
+  if (u.searchParams.get('from')) $('from').value = u.searchParams.get('from');
+  if (u.searchParams.get('to')) { fillTo(''); $('to').value = u.searchParams.get('to'); }
+  if (u.searchParams.get('pr')) $('pr').value = u.searchParams.get('pr');
+  if (!$('to').value && $('to').options.length) $('to').selectedIndex = 0;
+  if (u.searchParams.get('to')) run();
+});
+$('go').onclick = run; $('to').onchange = run; $('from').onchange = () => route && run(); $('pr').onchange = () => route && run();
+$('q').oninput = () => fillTo($('q').value.trim());
+$('swap').onclick = () => { const f = $('from').value, t = $('to').value; if (!t) return; if (f.startsWith('spot:')) { $('q').value = ''; fillTo(''); $('to').value = f; } $('from').value = t; if ($('from').value !== t) { /* 出発に無い（待ち合わせ場所以外）ときはそのまま */ } run(); };
+$('here').onclick = () => { if (!navigator.geolocation) return alert('この端末では位置が取れません'); navigator.geolocation.getCurrentPosition((p) => { const [x, y] = XY(p.coords.latitude, p.coords.longitude); let best = -1, bd = 3000; D.nodes.forEach((n, i) => { if (n[2] !== 0 || !adj[i].length) return; const d = Math.hypot(n[0] - x, n[1] - y); if (d < bd) { bd = d; best = i; } }); if (best < 0) return alert('駅から 3 km 以内で使ってください'); fromList.push({ name: '現在地', type: 'place', id: 'place:現在地', node: best, note: 'いまいる場所のそばの歩道から案内します。' }); const o = document.createElement('option'); o.value = 'place:現在地'; o.textContent = '現在地'; $('from').appendChild(o); $('from').value = 'place:現在地'; run(); }, () => alert('位置が取れませんでした'), { enableHighAccuracy: true, timeout: 8000 }); };
+</script>
+</body>
+</html>
