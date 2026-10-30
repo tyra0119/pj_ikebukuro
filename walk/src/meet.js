@@ -2,8 +2,8 @@
 // 同じ経路を「図と手順」（この画面のパネル）と「立体」（床の矢印・案内カード）の両方で見せる。手順を押すとその場所へ立体で飛ぶ。
 // 地上の歩道にも床があるので、出発から立体で歩ける。立体に床の無い点（地下 2 階・データの範囲外）の区間だけ図と手順で案内する。
 
-import { Guide, lvName } from './guide.js';
-import { startRoom, roomId } from './room.js';
+import { Guide, lvName } from './guide.js?v=mvurf0yx';
+import { startRoom, roomId } from './room.js?v=mvurf0yx';
 
 export async function initMeet(A) {
   const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared, setMeetRoute, clearRoute } = A;
@@ -148,20 +148,38 @@ export async function initMeet(A) {
         if (q && p.l === 1 && q.l === 1 && data.ramps) {
           const onFloor = (k) => phys.surfacesAt(k.x, k.y).some((z) => z > 31 && z < 36);
           const geo = data.ramps.filter((r) => r.exit).map((r) => { const L = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]) || 1; return { r, L, ux: (r.b[0] - r.a[0]) / L, uy: (r.b[1] - r.a[1]) / L, hw: r.w / 2 + 0.6 }; });
-          const inR = (g, x, y) => { const al = (x - g.r.a[0]) * g.ux + (y - g.r.a[1]) * g.uy, sd = Math.abs((x - g.r.a[0]) * -g.uy + (y - g.r.a[1]) * g.ux); return al > -0.5 && al < g.L + 0.3 && sd < g.hw; };
+          const inR = (g, x, y) => { const al = (x - g.r.a[0]) * g.ux + (y - g.r.a[1]) * g.uy, sd = Math.abs((x - g.r.a[0]) * -g.uy + (y - g.r.a[1]) * g.ux); return al > -0.5 && al < g.L + 0.8 && sd < g.hw + 0.25; }; // 上の端の先 0.8 m・横は体の半径ぶん広く（坂の横の壁の端に当たった。池袋の (137,-10)）
           const crosses = (a, b) => geo.find((g) => { if (inR(g, a.x, a.y) || inR(g, b.x, b.y)) return false; const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.3); for (let k = 1; k < n; k++) { const u = k / n; if (inR(g, a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u)) return true; } return false; });
-          const pick = (g, sg) => { for (const o of [g.hw + 0.8, g.hw + 0.4, g.hw + 1.5]) { const k = { x: g.r.b[0] + g.ux * 2.0 + -g.uy * o * sg, y: g.r.b[1] + g.uy * 2.0 + g.ux * o * sg, l: 1, lv: 0, around: 1 }; if (onFloor(k) && !geo.some((h) => inR(h, k.x, k.y))) return k; } const c0 = { x: g.r.b[0] + g.ux * 2.5, y: g.r.b[1] + g.uy * 2.5, l: 1, lv: 0, around: 1 }; return onFloor(c0) && !geo.some((h) => inR(h, c0.x, c0.y)) ? c0 : null; };
-          const route = (a, b, depth) => { // a → b のあいだに足す点
-            const g = depth < 4 && crosses(a, b); if (!g) return [];
-            const side = (x, y) => Math.sign((x - g.r.a[0]) * -g.uy + (y - g.r.a[1]) * g.ux) || 1, sa = side(a.x, a.y), sb = side(b.x, b.y);
-            const ks = [pick(g, sa), sb !== sa ? pick(g, sb) : null].filter(Boolean);
-            if (!ks.length) return [];
-            const out = []; let prevK = a;
-            for (const k of ks) { out.push(...route(prevK, k, depth + 1), k); prevK = k; }
-            out.push(...route(prevK, b, depth + 1));
+          // 回り方: 近くの出口の階段の四隅（少し外）を点にして、横切らない線だけで a から b までのいちばん短い道を探す。
+          // 1 本ずつ角を回る作り方では、出口の階段が 3 つ固まった所で行ったり来たりした（池袋の (133,-13)〜(139,-11)。2026-10-30）
+          const route = (a, b) => {
+            if (!crosses(a, b)) return [];
+            const mx = (a.x + b.x) / 2, my = (a.y + b.y) / 2, R = Math.hypot(b.x - a.x, b.y - a.y) / 2 + 25;
+            const ns = [a, b];
+            for (const g of geo) {
+              if (Math.hypot(g.r.a[0] - mx, g.r.a[1] - my) > R + g.L) continue;
+              for (const al of [-1.0, g.L + 2.0]) for (const sg of [1, -1]) {
+                const o = g.hw + 0.8, k = { x: g.r.a[0] + g.ux * al - g.uy * o * sg, y: g.r.a[1] + g.uy * al + g.ux * o * sg, l: 1, lv: 0, around: 1 };
+                if (onFloor(k) && !geo.some((h) => inR(h, k.x, k.y))) ns.push(k);
+              }
+            }
+            const n = ns.length, dist = new Array(n).fill(Infinity), from = new Array(n).fill(-1), done = new Array(n).fill(false);
+            dist[0] = 0;
+            for (;;) {
+              let u = -1; for (let i = 0; i < n; i++) if (!done[i] && dist[i] < Infinity && (u < 0 || dist[i] < dist[u])) u = i;
+              if (u < 0 || u === 1) break;
+              done[u] = true;
+              for (let v = 0; v < n; v++) {
+                if (done[v] || v === u) continue;
+                const d = dist[u] + Math.hypot(ns[v].x - ns[u].x, ns[v].y - ns[u].y);
+                if (d < dist[v] && !crosses(ns[u], ns[v])) { dist[v] = d; from[v] = u; }
+              }
+            }
+            if (from[1] < 0) return [];
+            const out = []; for (let v = from[1]; v > 0; v = from[v]) out.unshift(ns[v]);
             return out;
           };
-          walkPts.push(...route(q, p, 0));
+          walkPts.push(...route(q, p));
         }
         map[i] = walkPts.length; walkPts.push(p); prev = p;
       });

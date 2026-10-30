@@ -2,17 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuq6z4g';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuq6z4g';
-import { addTrains } from './trains.js?v=mvuq6z4g';
-import { routeSteps, stepLine } from './steps.js?v=mvuq6z4g';
-import { initMeet } from './meet.js';
+import { initPhoto } from './photo.js?v=mvurf0yx';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvurf0yx';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvurf0yx';
+import { addTrains } from './trains.js?v=mvurf0yx';
+import { routeSteps, stepLine } from './steps.js?v=mvurf0yx';
+import { initMeet } from './meet.js?v=mvurf0yx';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvuq6z4g'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvurf0yx'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -431,7 +432,10 @@ function getGrid() {
   const W = Math.ceil((x1 - x0) / C) + 1, H = Math.ceil((y1 - y0) / C) + 1, ok = new Uint8Array(W * H), zc = new Float32Array(W * H);
   const multi = new Map(); // 床が 2 枚以上重なるます → 高さの一覧
   for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
-    const zs = phys.surfacesAt(x0 + (i + 0.5) * C, y0 + (j + 0.5) * C).filter((z) => z > lo && z < hi);
+    const zs0 = phys.surfacesAt(x0 + (i + 0.5) * C, y0 + (j + 0.5) * C).filter((z) => z > lo && z < hi);
+    // すぐ上（1.9 m 未満）に別の面がある床は使わない。段差（STEP）以内なら歩くと上の面に持ち上げられ、それより高ければ頭がつかえる。
+    // 地下の床に低くかぶさる階段の足元で、ます目は下の床を通るのに、歩くと階段を上ってしまった（池袋の (195,44)。2026-10-30）
+    const zs = zs0.filter((z) => !zs0.some((w) => w > z + 0.05 && w < z + 1.9));
     if (!zs.length) continue;
     ok[j * W + i] = 1;
     zc[j * W + i] = zs.reduce((b, v) => (Math.abs(v - z0) < Math.abs(b - z0) ? v : b));
@@ -549,12 +553,16 @@ function snapCell(x, y, wide = false) {
   const { C, x0, y0, W, H, ok, near, comp, main, sizes } = grid;
   const okComp = (k) => k === main || (wide && k >= 0 && sizes[k] >= 400);
   const ci = Math.floor((x - x0) / C), cj = Math.floor((y - y0) / C);
+  // その点に床があれば、その床と段差（STEP）以内のますだけに寄せる。壁ぎわの点から、となりの階段の上のますに寄せて、
+  // 地下の床の点へ向かう道が階段を上ってしまった（池袋の (197,41)。2026-10-30）
+  const c0 = ci >= 0 && cj >= 0 && ci < W && cj < H && grid.ok[cj * W + ci] ? cj * W + ci : -1, zRef = c0 >= 0 ? grid.zc[c0] : null;
   let fallback = -1;
   for (let r = 0; r <= 24; r++) {
     for (let dj = -r; dj <= r; dj++) for (let di = -r; di <= r; di++) {
       if (Math.max(Math.abs(di), Math.abs(dj)) !== r) continue;
       const i = ci + di, j = cj + dj, c = j * W + i;
       if (i < 0 || j < 0 || i >= W || j >= H || !ok[c] || !okComp(comp[c])) continue;
+      if (zRef != null && Math.abs(grid.zc[c] - zRef) > STEP) continue;
       if (!near[c]) return c;
       if (fallback < 0) fallback = c;
     }
@@ -1934,6 +1942,16 @@ if (!replaying) {
 // ---------- 待ち合わせ案内（統合データ。図と手順 + 立体） ----------
 const meetShared = { p: null }; // あいての位置（小さな地図が描く）
 const meet = await initMeet({ $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared: meetShared, setMeetRoute: (r) => { nav.fixed = r; setDest(r); }, clearRoute: () => setDest(null) });
+// 写真の街並み（photo.js。Ekishirube を参考に）: 地上のある駅だけボタンを出す。選んだかどうかは端末に覚える
+if (data.mall && data.mall.layout && data.mall.layout.gfloor) {
+  const baseCredit = '出典: ' + data.credits.join(' ／ ');
+  const photo = initPhoto({ scene, data, groundZ: LV['1'].z, stationKey: ST.key, setStatus: (t) => { if (t) toast(t); }, onCredit: (c) => { $('credit').textContent = c ? baseCredit + ' ／ ' + c : baseCredit; } });
+  const btn = $('photoBtn'); btn.hidden = false;
+  const show = (on) => { btn.classList.toggle('primary', on); btn.textContent = on ? '写真の街並み ✓' : '写真の街並み'; };
+  btn.onclick = async () => { const on = await photo.set(!photo.on); show(on); try { localStorage.setItem('ekisanpo.photo', on ? '1' : '0'); } catch (err) { void err; } };
+  try { if (localStorage.getItem('ekisanpo.photo') === '1') photo.set(true).then(show); } catch (err) { void err; }
+  window.ekisanpoPhoto = photo;
+}
 
 // ---------- はじめの説明 ----------
 const seen = (() => { try { return localStorage.getItem('ekisanpo.help') === '1'; } catch { return false; } })();
