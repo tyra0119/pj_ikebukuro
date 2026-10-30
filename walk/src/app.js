@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvurf0yx';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvurf0yx';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvurf0yx';
-import { addTrains } from './trains.js?v=mvurf0yx';
-import { routeSteps, stepLine } from './steps.js?v=mvurf0yx';
-import { initMeet } from './meet.js?v=mvurf0yx';
+import { initPhoto } from './photo.js?v=mvuudu1t';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuudu1t';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuudu1t';
+import { addTrains } from './trains.js?v=mvuudu1t';
+import { routeSteps, stepLine } from './steps.js?v=mvuudu1t';
+import { initMeet } from './meet.js?v=mvuudu1t';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvurf0yx'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvuudu1t'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -1387,9 +1387,17 @@ for (const l of Object.keys(LV)) {
     const L = data.mall.layout.floor, f = new Float32Array(mallBuf, L[0], L[1]);
     for (let i = 0; i < f.length; i += 9) if (Math.abs(f[i + 2] - LV[l].z) < 2.5) { mall.moveTo(f[i], f[i + 1]); mall.lineTo(f[i + 3], f[i + 4]); mall.lineTo(f[i + 6], f[i + 7]); mall.closePath(); }
   }
-  paths[l] = { floor, block, wall, mall };
+  // 地上（1F）の街並み: 歩道・道路（地下街のファイルの gfloor。道路は歩道より低い）と建物の輪郭（gbld）
+  const gside = new Path2D(), groad = new Path2D(), gbld = new Path2D();
+  if (l === '1' && data.mall && data.mall.layout.gfloor) {
+    const L = data.mall.layout.gfloor, f = new Float32Array(mallBuf, L[0], L[1]), gz = LV[l].z;
+    for (let i = 0; i < f.length; i += 9) { const P = Math.max(f[i + 2], f[i + 5], f[i + 8]) < gz - 0.06 ? groad : gside; P.moveTo(f[i], f[i + 1]); P.lineTo(f[i + 3], f[i + 4]); P.lineTo(f[i + 6], f[i + 7]); P.closePath(); }
+    for (const r of data.gbld || []) ring(gbld, r);
+  }
+  paths[l] = { floor, block, wall, mall, gside, groad, gbld };
 }
 const ramps2d = data.ramps;
+let photoCity = null; // 写真の街並み（photo.js）。1F の小さな地図に航空写真を敷く
 function miniSize() {
   const r = mcv.getBoundingClientRect();
   mcv.width = Math.round(r.width * devicePixelRatio);
@@ -1417,6 +1425,14 @@ function drawMini() {
   const pl = mini.floor ?? cur;
   const P = paths[pl];
   mg.setTransform(dpr * k * c, -dpr * k * s, -dpr * k * s, -dpr * k * c, dpr * (W / 2 - k * (c * mini.cx - s * mini.cy)), dpr * (H / 2 + k * (s * mini.cx + c * mini.cy)));
+  const gphoto = pl === '1' && photoCity && photoCity.ground; // 写真の街並みのときは航空写真
+  if (gphoto) { const e = gphoto.ext; mg.save(); mg.translate(e.w, e.n); mg.scale(1, -1); mg.drawImage(gphoto.canvas, 0, 0, e.e - e.w, e.n - e.s); mg.restore(); }
+  else {
+    mg.fillStyle = '#f4f2ed'; mg.fill(P.gside);
+    mg.fillStyle = '#c3c6cb'; mg.fill(P.groad);
+    mg.fillStyle = '#dcd5c8'; mg.fill(P.gbld);
+    mg.strokeStyle = '#c2b9aa'; mg.lineWidth = 0.8 / k; mg.stroke(P.gbld);
+  }
   mg.fillStyle = '#fbfaf6'; mg.fill(P.mall);
   mg.fillStyle = '#ffffff'; mg.fill(P.floor);
   mg.fillStyle = '#d5cfc4'; mg.fill(P.block);
@@ -1950,7 +1966,7 @@ if (data.mall && data.mall.layout && data.mall.layout.gfloor) {
   const show = (on) => { btn.classList.toggle('primary', on); btn.textContent = on ? '写真の街並み ✓' : '写真の街並み'; };
   btn.onclick = async () => { const on = await photo.set(!photo.on); show(on); try { localStorage.setItem('ekisanpo.photo', on ? '1' : '0'); } catch (err) { void err; } };
   try { if (localStorage.getItem('ekisanpo.photo') === '1') photo.set(true).then(show); } catch (err) { void err; }
-  window.ekisanpoPhoto = photo;
+  window.ekisanpoPhoto = photo; photoCity = photo;
 }
 
 // ---------- はじめの説明 ----------

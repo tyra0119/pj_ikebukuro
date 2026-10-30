@@ -35,7 +35,7 @@ export function initPhoto({ scene, data, groundZ, stationKey, setStatus, onCredi
     }));
     // 画像の範囲（局所平面 m）: 西・東・南・北
     const ext = { w: (lonOf(x0, z) - origin.lon) * KX, e: (lonOf(x1 + 1, z) - origin.lon) * KX, s: (latOf(y1 + 1, z) - origin.lat) * KY, n: (latOf(y0, z) - origin.lat) * KY };
-    return { tex, ext, ready: Promise.all(jobs) };
+    return { tex, ext, canvas: c, ready: Promise.all(jobs) };
   }
   // 地上の床（groundFloor）に、位置から求めた写真の座標を付けて写真を貼る（出口の階段の口はあいたまま）
   function applyGround(g) { for (const m of floorMeshes()) applyGroundTo(m, g); }
@@ -154,5 +154,5 @@ export function initPhoto({ scene, data, groundZ, stationKey, setStatus, onCredi
     }
     return st.on;
   }
-  return { set, get on() { return st.on; } };
+  return { set, get on() { return st.on; }, get ground() { return st.on && st.ground ? st.ground : null; } }; // ground: 小さな地図の 1F に敷く航空写真
 }
