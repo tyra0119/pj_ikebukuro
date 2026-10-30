@@ -61,7 +61,7 @@
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const DATA = ['../data/meet.json?v=mvucjfmj', '../data/meet.json?v=mvucjfmj'];
+const DATA = ['../data/meet.json?v=mvuckdez', '../data/meet.json?v=mvuckdez'];
 const ORIGIN = { lat: 35.7295, lon: 139.7109 };
 const a = 6378137, e2 = 0.00669438002290, phi = ORIGIN.lat * Math.PI / 180, w = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
 const KX = (Math.PI / 180) * (a / w) * Math.cos(phi), KY = (Math.PI / 180) * ((a * (1 - e2)) / w ** 3);
@@ -204,7 +204,7 @@ function describe(E, from, to) {
     } else {
       counts[s.mode] = (counts[s.mode] || 0) + 1;
       const up = s.l1 > s.l0, word = { 2: '階段', 4: 'エスカレーター', 5: 'エレベーター' }[s.mode] || '階段';
-      let title = s.mode === EV ? `エレベーターで${lvName(s.l1)}へ` : `${up ? '上り' : '下り'}${word}で${lvName(s.l1)}へ`, detail = `${lvName(s.l0)} → ${lvName(s.l1)}`;
+      let title = s.mode === EV ? `エレベーターで${lvName(s.l1)}へ` : s.l0 === s.l1 ? `${word}を通る（同じ${lvName(s.l0)}の中の段差）` : `${up ? '上り' : '下り'}${word}で${lvName(s.l1)}へ`, detail = s.l0 === s.l1 ? `${lvName(s.l0)}の中の短い${word}（データ上は同じ階どうし）` : `${lvName(s.l0)} → ${lvName(s.l1)}`;
       let exitAt = null, exitNode = -1; for (const e of s.edges) for (const ni of [e.a, e.b]) if (exitAt == null && N(ni)[4] === 2) { exitAt = N(ni)[5] || '番号のない出口'; exitNode = ni; }
       if (exitAt && (s.l0 === 0 || s.l1 === 0)) {
         let en = exitAt; const bm = exitNode >= 0 && markNear(exitNode, 90, 'b', used); if (bm) { used[bm[3]] = 1; en = `${bm[3]}のそばの${en}`; }
