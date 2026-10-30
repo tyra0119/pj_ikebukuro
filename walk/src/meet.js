@@ -143,23 +143,25 @@ export async function initMeet(A) {
           const g = gp(q.x, q.y, p.x, p.y), straight = Math.hypot(p.x - q.x, p.y - q.y);
           if (g && g.length > 2 && Math.hypot(g[g.length - 1][0] - p.x, g[g.length - 1][1] - p.y) < 1.0) { let L = 0; for (let k = 1; k < g.length; k++) L += Math.hypot(g[k][0] - g[k - 1][0], g[k][1] - g[k - 1][1]); if (L < straight * 6 + 40) for (let k = 1; k < g.length - 1; k++) walkPts.push({ x: g[k][0], y: g[k][1], l: -1, lv: -1, grid: 1 }); }
         }
-        // 地上どうしの線が出口の階段（坂）の上を横切るときは、階段の口の 2 m 先を回る（階段室の横の壁に当たった）
+        // 地上どうしの線が出口の階段（坂）の上を横切るときは、階段の口の 2 m 先の角を回る（階段室の横の壁に当たった）。回る点を足したあとの線も
+        // 確かめ直す（出口の階段が 3 つ固まった所で、1 つ目を回る点が 2 つ目の口にかかった。池袋の (133,-14)）
         if (q && p.l === 1 && q.l === 1 && data.ramps) {
-          for (const r of data.ramps) {
-            if (!r.exit) continue;
-            const L = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]) || 1, ux = (r.b[0] - r.a[0]) / L, uy = (r.b[1] - r.a[1]) / L, hw = r.w / 2 + 0.6;
-            const inR = (x, y) => { const al = (x - r.a[0]) * ux + (y - r.a[1]) * uy, sd = Math.abs((x - r.a[0]) * -uy + (y - r.a[1]) * ux); return al > -0.5 && al < L + 0.3 && sd < hw; };
-            const n = Math.ceil(Math.hypot(p.x - q.x, p.y - q.y) / 0.3); let hit = false;
-            for (let k = 1; k < n && !hit; k++) { const u = k / n; if (inR(q.x + (p.x - q.x) * u, q.y + (p.y - q.y) * u)) hit = true; }
-            if (hit && !inR(p.x, p.y) && !inR(q.x, q.y)) { // 階段の口の先の角（q の側 → p の側）を回る
-              const side = (x, y) => Math.sign((x - r.a[0]) * -uy + (y - r.a[1]) * ux) || 1, sq = side(q.x, q.y), sp = side(p.x, p.y), off = hw + 0.8;
-              const K = (sg) => ({ x: r.b[0] + ux * 2.0 + -uy * off * sg, y: r.b[1] + uy * 2.0 + ux * off * sg, l: 1, lv: 0, around: 1 });
-              const onFloor = (k) => phys.surfacesAt(k.x, k.y).some((z) => z > 31 && z < 36);
-              const pick = (sg) => { for (const o of [hw + 0.8, hw + 0.4, hw + 1.5]) { const k = { x: r.b[0] + ux * 2.0 + -uy * o * sg, y: r.b[1] + uy * 2.0 + ux * o * sg, l: 1, lv: 0, around: 1 }; if (onFloor(k)) return k; } const c0 = { x: r.b[0] + ux * 2.5, y: r.b[1] + uy * 2.5, l: 1, lv: 0, around: 1 }; return onFloor(c0) ? c0 : null; };
-              const k1 = pick(sq), k2 = sp !== sq ? pick(sp) : null; if (k1) walkPts.push(k1); if (k2 && (!k1 || Math.hypot(k2.x - k1.x, k2.y - k1.y) > 0.5)) walkPts.push(k2);
-              break;
-            }
-          }
+          const onFloor = (k) => phys.surfacesAt(k.x, k.y).some((z) => z > 31 && z < 36);
+          const geo = data.ramps.filter((r) => r.exit).map((r) => { const L = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]) || 1; return { r, L, ux: (r.b[0] - r.a[0]) / L, uy: (r.b[1] - r.a[1]) / L, hw: r.w / 2 + 0.6 }; });
+          const inR = (g, x, y) => { const al = (x - g.r.a[0]) * g.ux + (y - g.r.a[1]) * g.uy, sd = Math.abs((x - g.r.a[0]) * -g.uy + (y - g.r.a[1]) * g.ux); return al > -0.5 && al < g.L + 0.3 && sd < g.hw; };
+          const crosses = (a, b) => geo.find((g) => { if (inR(g, a.x, a.y) || inR(g, b.x, b.y)) return false; const n = Math.ceil(Math.hypot(b.x - a.x, b.y - a.y) / 0.3); for (let k = 1; k < n; k++) { const u = k / n; if (inR(g, a.x + (b.x - a.x) * u, a.y + (b.y - a.y) * u)) return true; } return false; });
+          const pick = (g, sg) => { for (const o of [g.hw + 0.8, g.hw + 0.4, g.hw + 1.5]) { const k = { x: g.r.b[0] + g.ux * 2.0 + -g.uy * o * sg, y: g.r.b[1] + g.uy * 2.0 + g.ux * o * sg, l: 1, lv: 0, around: 1 }; if (onFloor(k) && !geo.some((h) => inR(h, k.x, k.y))) return k; } const c0 = { x: g.r.b[0] + g.ux * 2.5, y: g.r.b[1] + g.uy * 2.5, l: 1, lv: 0, around: 1 }; return onFloor(c0) && !geo.some((h) => inR(h, c0.x, c0.y)) ? c0 : null; };
+          const route = (a, b, depth) => { // a → b のあいだに足す点
+            const g = depth < 4 && crosses(a, b); if (!g) return [];
+            const side = (x, y) => Math.sign((x - g.r.a[0]) * -g.uy + (y - g.r.a[1]) * g.ux) || 1, sa = side(a.x, a.y), sb = side(b.x, b.y);
+            const ks = [pick(g, sa), sb !== sa ? pick(g, sb) : null].filter(Boolean);
+            if (!ks.length) return [];
+            const out = []; let prevK = a;
+            for (const k of ks) { out.push(...route(prevK, k, depth + 1), k); prevK = k; }
+            out.push(...route(prevK, b, depth + 1));
+            return out;
+          };
+          walkPts.push(...route(q, p, 0));
         }
         map[i] = walkPts.length; walkPts.push(p); prev = p;
       });
