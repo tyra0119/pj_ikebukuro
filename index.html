@@ -119,6 +119,12 @@ defGroup('plDoor', 'PLATEAU 扉', '#e67e22', true, (g) => {
   if (!levelOK(-1)) return;
   for (const s of D.polygons.plateauDoors) L.polyline([LL(s[0], s[1]), LL(s[2], s[3])], { color: '#e67e22', weight: 4, opacity: 0.9, interactive: false }).addTo(g);
 });
+defGroup('madeFloor', 'OSM の線から作った床（床データの無い範囲）', '#9bd79b', true, (g) => {
+  for (const m of D.polygons.madeFloor || []) { if (!levelOK(m.level)) continue; const p = L.polygon(m.rect.map(([x, y]) => LL(x, y)), { stroke: false, fillColor: '#9bd79b', fillOpacity: 0.5 }); p.on('click', (e) => { show(`OSM の線から作った床（幅 ${m.width} m）階 ${m.level}\n線: ${m.link}`); L.DomEvent.stop(e); }); p.addTo(g); }
+});
+defGroup('madeWall', '作った床のふちの壁', '#3a8a3a', false, (g) => {
+  for (const s of D.polygons.madeWalls || []) { if (!levelOK(s[4])) continue; L.polyline([LL(s[0], s[1]), LL(s[2], s[3])], { color: '#3a8a3a', weight: 1, opacity: 0.7, interactive: false }).addTo(g); }
+});
 defGroup('jrSpace', 'JR 構内地図の面', '#f4a6a6', true, (g) => {
   for (const s of D.polygons.jrSpaces) {
     if (!levelOK(s.level)) continue;
@@ -209,7 +215,7 @@ function renderIssues() {
   }
 }
 
-const DATA = ['data/merged.json?v=mvubfnfr'];
+const DATA = ['data/merged.json?v=mvubj6vd'];
 const load = (i) => fetch(DATA[i]).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch((e) => (i + 1 < DATA.length ? load(i + 1) : Promise.reject(e)));
 load(0).then((d) => {
   D = d;
@@ -221,6 +227,7 @@ load(0).then((d) => {
     `JR 構内図 B1 と PLATEAU の床の重なり ${(s.overlapJrPlateau * 100).toFixed(1)}%（ずらし最適 東 ${s.bestShiftJr.sx * 0.5} m・北 ${s.bestShiftJr.sy * 0.5} m）`,
     `OSM 地下 1 階が床の上を通る割合 ${(s.osmOnFloorBefore * 100).toFixed(1)}% → ${(s.osmOnFloorAfter * 100).toFixed(1)}%、壁を横切る所 ${s.wallCrossBefore} → ${s.wallCrossAfter}`,
     `接続線 ${s.connectors}・まとまり ${s.components}（本体 ${(100 * s.mainComponent / s.nodesUsed).toFixed(1)}%）`,
+    s.made ? `OSM の線から作った床: ${s.made.madeArea}、床の無い所を通る標本 ${(100 * s.made.offBefore / s.made.n).toFixed(1)}% → ${(100 * s.made.offAfter / s.made.n).toFixed(1)}%` : '',
     `床の穴（2 m² 以上）${s.bigHoles}・うち経路が通る ${s.holesOnPath}、天井の無い床 ${s.noCeil} ます、JR の中の PLATEAU の壁 ${s.wallInJr} 本`,
     `<a href="../out/report.md" target="_blank">点検結果（report.md）</a>`,
   ].join('<br>');
