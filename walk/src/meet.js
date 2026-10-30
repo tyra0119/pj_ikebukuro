@@ -64,6 +64,25 @@ export async function initMeet(A) {
   }
   function stopShare() { if (room) room.stop(); room = null; partner = null; shared.p = null; if (fig) fig.visible = false; $('meetStop').hidden = true; paintPartner(); const u = new URL(location.href); u.searchParams.delete('room'); u.searchParams.delete('role'); history.replaceState(null, '', u); toast('共有をやめました'); }
   $('meetStop').onclick = stopShare;
+  // 現在地（利用者 2026-10-30「出発は、地上にいるかもしれないので、現在地も設定できるようにして」）: 端末の位置から 3 km 以内の、いちばん近い地上の歩道の点
+  const ORIGIN = D.origin, aE = 6378137, e2 = 0.00669438002290, phi = (ORIGIN.lat * Math.PI) / 180, wv = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
+  const KX = (Math.PI / 180) * (aE / wv) * Math.cos(phi), KY = (Math.PI / 180) * ((aE * (1 - e2)) / wv ** 3);
+  $('meetHere').onclick = () => {
+    if (!navigator.geolocation) { toast('この端末では位置が取れません'); return; }
+    $('meetHere').disabled = true;
+    navigator.geolocation.getCurrentPosition((p) => {
+      $('meetHere').disabled = false;
+      const x = (p.coords.longitude - ORIGIN.lon) * KX, y = (p.coords.latitude - ORIGIN.lat) * KY;
+      let best = -1, bd = 3000;
+      D.nodes.forEach((n, i) => { if (n[2] !== 0 || n[6] !== 'mlit' || !G.adj[i].length) return; const d = Math.hypot(n[0] - x, n[1] - y); if (d < bd) { bd = d; best = i; } });
+      if (best < 0) { toast('駅から 3 km 以内で使ってください'); return; }
+      const it = { name: '現在地', type: 'place', id: 'place:現在地', node: best, x: D.nodes[best][0], y: D.nodes[best][1], note: `いまいる場所のそばの歩道（約${Math.round(bd)} m）から案内します。` };
+      const k = fromList.findIndex((f) => f.id === it.id); if (k >= 0) fromList[k] = it; else fromList.unshift(it);
+      if (![...fromSel.options].some((o) => o.value === it.id)) { const o = document.createElement('option'); o.value = it.id; o.textContent = '現在地'; fromSel.insertBefore(o, fromSel.firstChild); }
+      fromSel.value = it.id;
+      if (toSel.value) run(); else toast('現在地を出発にしました。待ち合わせ場所を選んでください');
+    }, () => { $('meetHere').disabled = false; toast('位置が取れませんでした'); }, { enableHighAccuracy: true, timeout: 8000 });
+  };
 
   // ---- 画面
   const fromSel = $('meetFrom'), toSel = $('meetTo'), prSel = $('meetPr');

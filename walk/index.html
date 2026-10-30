@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>エキさんぽ</title>
 <meta name="description" content="JR の駅（池袋・東京・新宿・渋谷・品川・高輪ゲートウェイ）と地下街を、人の目線で自由に歩き回れる立体の構内図">
-<link rel="stylesheet" href="src/style.css?v=mvuf64ez">
+<link rel="stylesheet" href="src/style.css?v=mvufnss5">
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
@@ -142,7 +142,7 @@
   <div class="sheet">
     <div class="head"><b>待ち合わせ案内</b><button id="meetClose" class="x" type="button" aria-label="閉じる">✕</button></div>
     <div class="meetForm">
-      <label>出発<select id="meetFrom"></select></label>
+      <label>出発<div class="row"><select id="meetFrom"></select><button id="meetHere" class="btn" type="button" title="端末の位置から、いちばん近い歩道の点を出発にする">現在地</button></div></label>
       <label>待ち合わせ場所<input id="meetQ" type="search" placeholder="名前で探す" autocomplete="off"><select id="meetTo" size="4"></select></label>
       <div class="row"><select id="meetPr"><option value="std">標準</option><option value="stair">階段を使う</option><option value="esc">エスカレーターを使う</option><option value="ev">エレベーター（段差なし）</option></select><button id="meetGo" class="btn primary" type="button">案内</button></div>
     </div>
@@ -192,7 +192,7 @@
       <li>壁や改札機にはぶつかります。改札機のあいだを通り抜けてください</li>
     </ul>
     <p id="helpCredit" class="note"></p>
-    <p class="note"><a href="manual.html" target="_blank" rel="noopener">使い方（録画と共有・URL・データ）</a>　版: <span id="appVer">10/30 12:35（mvuf64ez）</span></p>
+    <p class="note"><a href="manual.html" target="_blank" rel="noopener">使い方（録画と共有・URL・データ）</a>　版: <span id="appVer">10/30 12:49（mvufnss5）</span></p>
     <button id="helpOk" class="btn primary" type="button">歩きはじめる</button>
   </div>
 </div>
@@ -200,6 +200,6 @@
 <footer id="credit"></footer>
 <div id="loading">読み込み中…</div>
 
-<script type="module" src="src/app.js?v=mvuf64ez"></script>
+<script type="module" src="src/app.js?v=mvufnss5"></script>
 </body>
 </html>
