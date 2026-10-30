@@ -31,6 +31,7 @@
 <div id="side">
   <h1>池袋 4 データの重ね合わせ</h1>
   <div class="stats" id="stats">読み込み中…</div>
+  <p><a href="walk/?st=ikebukuro" target="_blank" rel="noopener"><b>歩く（立体）</b></a> … まとめた床・壁・坂を人の目線で歩く（Ekisanpo の仕組み）</p>
   <h2>階</h2>
   <div class="levels" id="levels"></div>
   <h2>表示するもの</h2>
@@ -216,7 +217,7 @@ function renderIssues() {
   }
 }
 
-const DATA = ['data/merged.json?v=mvubu2fx'];
+const DATA = ['data/merged.json?v=mvuc2c7v'];
 const load = (i) => fetch(DATA[i]).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch((e) => (i + 1 < DATA.length ? load(i + 1) : Promise.reject(e)));
 load(0).then((d) => {
   D = d;

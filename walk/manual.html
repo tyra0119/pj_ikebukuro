@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>エキさんぽ 使い方</title>
+<meta name="description" content="エキさんぽの使い方。JR の駅（池袋・東京・新宿・渋谷・品川・高輪ゲートウェイ）と地下街を人の目線で歩き、歩いた道を録画してリンクで送れます">
+<style>
+:root {
+  --bg: #eef0f3; --surface: #ffffff; --ink: #15181f; --muted: #596070; --line: #d3d8e0; --faint: #e5e8ed;
+  --green: #0b8f4d; --orange: #f08c00; --orange-ink: #b85f00; --orange-soft: #fff3e0; --sign: #1c2333; --blue: #1f6feb;
+}
+@media (prefers-color-scheme: dark) {
+  :root { --bg: #111319; --surface: #1a1d25; --ink: #eceef3; --muted: #a2a9b8; --line: #2f3440; --faint: #232731;
+    --green: #2fc46b; --orange-ink: #ffb547; --orange-soft: #2b2112; --sign: #0b0e15; --blue: #4d8fff; color-scheme: dark; }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--ink); font-family: "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", "Yu Gothic", "Meiryo", sans-serif; font-size: 16px; line-height: 1.8; }
+.sign { background: var(--sign); color: #fff; border-left: 8px solid #0b8f4d; }
+.sign .in { max-width: 920px; margin: 0 auto; padding: 16px; display: flex; align-items: center; gap: 14px; flex-wrap: wrap; }
+.sign h1 { margin: 0; font-size: 24px; font-weight: 900; letter-spacing: .04em; }
+.sign h1 span { color: #6fd39b; }
+.sign h1 small { display: block; font-size: 12px; font-weight: 500; opacity: .75; letter-spacing: .08em; }
+.sign a { color: #fff; margin-left: auto; font-size: 14px; white-space: nowrap; background: #0b8f4d; padding: 6px 14px; border-radius: 999px; text-decoration: none; font-weight: 700; }
+main { max-width: 920px; margin: 0 auto; padding: 8px 16px 48px; }
+section { background: var(--surface); border: 1px solid var(--line); border-radius: 12px; padding: 20px 22px; margin-top: 20px; }
+section.rec { border: 2px solid var(--orange); }
+h2 { font-size: 20px; margin: 0 0 8px; letter-spacing: .03em; display: flex; align-items: center; gap: 10px; text-wrap: balance; }
+h2 .no { font-size: 15px; color: #fff; background: var(--green); border-radius: 999px; width: 28px; height: 28px; display: grid; place-items: center; flex: none; }
+section.rec h2 .no { background: var(--orange); }
+h2 .tag { font-size: 12px; background: var(--orange); color: #1c2333; border-radius: 999px; padding: 0 10px; font-weight: 800; }
+h3 { font-size: 16px; margin: 18px 0 4px; }
+p { margin: 6px 0; } ul, ol { margin: 6px 0; padding-left: 1.4em; } li { margin: 2px 0; }
+figure { margin: 14px 0 6px; }
+figure img { width: 100%; height: auto; border-radius: 8px; border: 1px solid var(--line); display: block; }
+figure.phone { max-width: 260px; }
+figcaption { font-size: 13px; color: var(--muted); margin-top: 4px; }
+.two { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+.wide { display: grid; grid-template-columns: minmax(0, 1.7fr) minmax(0, 1fr); gap: 16px; align-items: start; }
+table { border-collapse: collapse; width: 100%; font-size: 14px; margin: 8px 0; }
+th, td { border-bottom: 1px solid var(--line); padding: 6px 8px; text-align: left; vertical-align: top; }
+th { color: var(--muted); font-weight: 500; white-space: nowrap; }
+kbd { display: inline-block; border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 6px; font-size: 13px; background: var(--faint); }
+.o { color: var(--orange-ink); font-weight: 700; } .g { color: var(--green); font-weight: 700; }
+.steps { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; margin: 10px 0; }
+.steps span { background: var(--orange-soft); border: 1px solid var(--orange); border-radius: 8px; padding: 2px 12px; font-weight: 700; }
+.steps i { color: var(--orange-ink); font-style: normal; font-weight: 900; }
+.note { background: var(--orange-soft); border-radius: 8px; padding: 10px 14px; font-size: 14px; margin-top: 10px; }
+.links a { display: block; padding: 8px 12px; border: 1px solid var(--line); border-radius: 8px; margin: 6px 0; text-decoration: none; color: var(--ink); background: var(--faint); }
+.links a b { color: var(--orange-ink); }
+.links a small { color: var(--muted); }
+code { font-family: Consolas, monospace; font-size: 13.5px; background: var(--faint); padding: 0 4px; border-radius: 4px; word-break: break-all; }
+footer { font-size: 12px; color: var(--muted); margin-top: 24px; }
+a { color: var(--blue); }
+@media (max-width: 680px) {
+  .two, .wide { grid-template-columns: 1fr; }
+  table, tbody, tr, th, td { display: block; width: 100%; }
+  tr { border-bottom: 1px solid var(--line); padding: 6px 0; }
+  th, td { border-bottom: none; padding: 2px 0; }
+}
+</style>
+</head>
+<body>
+<header class="sign"><div class="in">
+  <h1>エキ<span>さんぽ</span> 使い方<small>JR の駅と地下街を、人の目線で歩く</small></h1>
+  <a href="./">エキさんぽを開く</a>
+</div></header>
+<main>
+
+<section>
+  <h2><span class="no">1</span>エキさんぽとは</h2>
+  <div class="wide">
+    <div>
+      <p>JR東日本の 6 駅（<b>池袋・東京・新宿・渋谷・品川・高輪ゲートウェイ</b>）と地下街を、ストリートビューのように<b>人の目線で自由に歩ける</b> Web アプリです。PC でもスマートフォンでも、ブラウザだけで動きます。</p>
+      <ul>
+        <li>壁や改札機には<b>ぶつかります</b>。改札機のあいだを通り、階段・エスカレーターを上り下りし、エレベーターにも乗れます</li>
+        <li>出発・行き先を選ぶと、<b>床の矢印</b>で道を案内します</li>
+        <li><span class="o">歩いた道を録画して、リンクで送れます</span>（<a href="#rec">3. 録画と共有</a>）</li>
+      </ul>
+    </div>
+    <figure><img src="manual/01_gate.jpg" alt="池袋駅の中央改札を人の目線で見た画面" loading="lazy"><figcaption>池袋駅 地下 1 階の中央改札。床の青い矢印が 5番線ホームへの道</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2><span class="no">2</span>歩く・見回す</h2>
+  <div class="wide">
+    <div>
+      <table>
+        <tr><th>PC</th><td><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>・矢印キーで歩く（<kbd>←</kbd><kbd>→</kbd> で向きを変える）、<kbd>Shift</kbd> で走る。画面をドラッグで見回す</td></tr>
+        <tr><th>スマホ</th><td>左下の<b>十字キー</b>（▲▼ で前後、◀▶ で向きを変える、真ん中で走る）。右側をなぞって見回す。左側を押したまま動かしても歩ける</td></tr>
+        <tr><th>地図</th><td>右下の小さな地図を<b>タップすると「行き先にする」「ここへ移動」</b>（くわしくは下の「小さな地図」）</td></tr>
+      </table>
+      <p>左上には、いまいる<b>階</b>と、<b>改札内</b>（緑）・<b>改札外</b>（灰色）が出ます。</p>
+      <p>いちばん上の<b>方角の帯</b>には、向いている方向の左右に東西南北と、駅のまわりの目印（池袋ならサンシャインシティ・ホテルメトロポリタン・東京芸術劇場、東京なら皇居・日本橋高島屋など）が出ます。帯の外の目印は端に「◀ 名前」。地下で方向が分からなくなったときに。</p>
+    </div>
+    <figure class="phone"><img src="manual/09_mobile_walk.jpg" alt="スマホの画面。左下に十字キー" loading="lazy"><figcaption>スマホでは左下の十字キーで歩く</figcaption></figure>
+  </div>
+  <h3>小さな地図</h3>
+  <div class="wide">
+    <div>
+      <table>
+        <tr><th>タップ</th><td>いつも<b>「行き先にする」「ここへ移動」</b>の札が出る。改札・出口・トイレなどの印を押すとその行き先、印の無い所は「地図で選んだ場所」（歩けない所なら近くの歩ける所。左の階の切り替えで、ほかの階の場所も選べる）。「ここへ移動」で滑るように移動し、進む向きを向く</td></tr>
+        <tr><th>動かす</th><td>Google マップと同じ。ドラッグ・指 1 本で動かす、右ドラッグ・2 本指でひねって回す、ホイール・2 本指で広げて拡大</td></tr>
+        <tr><th>方角</th><td>北の向きを指す。押すと北が上に戻る</td></tr>
+        <tr><th>現在地</th><td>自分を真ん中に。<b>もう一度押すと、進む向きが上</b>になり（ボタンが水色）、歩いて向きを変えると地図も回る。もう一度押すか、方角のボタンで北が上に戻る</td></tr>
+        <tr><th>＋ −</th><td>拡大・縮小</td></tr>
+        <tr><th>階</th><td>左の 2F・1F・B1 などで、ほかの階を見る（青が出している階、点が自分のいる階）</td></tr>
+        <tr><th>大きく</th><td>右上のボタンで地図を大きく・小さく（大きいあいだ、スマホの十字キーは隠れる）</td></tr>
+      </table>
+    </div>
+    <figure><img src="manual/17_heading_map.jpg" alt="地図を大きくし、進む向きを上にした画面" loading="lazy"><figcaption>地図を大きくして、進む向きを上に。上の帯に方角と目印</figcaption></figure>
+  </div>
+</section>
+
+<section id="lost">
+  <h2><span class="no">!</span>迷ったら</h2>
+  <p>左上の<b>「迷ったら」</b>から、次の 2 つが使えます。駅の中では GPS が使えないので、<b>見えている看板</b>で自分の場所を合わせます。</p>
+  <table>
+    <tr><th>いまどこ？</th><td>近くに見える看板（出口の番号・改札・番線・トイレ・コインロッカーなど）を一覧から選ぶ（名前で探せる）と、<b>その看板が見える所</b>（看板から 5 m ほど離れた所）に立ち、看板の方を向きます。そのまま「出発・行き先」で行き先を選べば、そこからの案内になります</td></tr>
+    <tr><th>ここにいますを送る</th><td>今いる場所と向きを<b>リンク</b>で送ります（スマホは LINE・メールなどの共有）。受け取った人がリンクを開くと「相手はここにいます（女子トイレのそば・B1・改札内）」と出て、相手のいる場所に<b>光の柱</b>が立ちます。「そこまでの道を調べる」で、自分のいる所の近くに見える看板を選ぶと、相手のいる場所までを案内します。「その場所の景色を見る」で、相手が見ている向きの景色も見られます</td></tr>
+  </table>
+  <p class="note">待ち合わせで相手が見つからないとき・迎えに行くときに。リンクには場所と向き（数字）だけが入り、サーバには何も残りません。</p>
+</section>
+
+<section class="rec" id="rec">
+  <h2><span class="no">3</span>録画と共有<span class="tag">いちばんの見どころ</span></h2>
+  <p>歩いた道を録画して、<span class="o">リンクを 1 つ送るだけ</span>で、相手は同じ道を人の目線で見られます。道案内・待ち合わせ・迷子対策に。</p>
+  <div class="steps"><span>● 録画</span><i>▶</i><span>駅の中を歩く</span><i>▶</i><span>止める</span><i>▶</i><span>リンクを送る</span><i>▶</i><span>相手が開くと同じ道を再生</span></div>
+  <div class="two">
+    <figure><img src="manual/05_recording.jpg" alt="録画中の画面。左上のボタンが「止める」に" loading="lazy"><figcaption>左上の「録画」を押すと「止める 0:04」に変わり、歩いた道を記録する</figcaption></figure>
+    <figure><img src="manual/06_share.jpg" alt="録画を止めたときの共有の画面" loading="lazy"><figcaption>「止める」で共有の画面。「リンクを送る」（スマホは LINE・メールなどの共有）、「コピー」、画面の動画の「動画を送る」「保存」</figcaption></figure>
+  </div>
+  <h3>再生リンク</h3>
+  <div class="wide">
+    <div>
+      <ul>
+        <li>リンクを開くと、まず<b>道順の画面</b>が出ます。「出口 7 → 5番線」のような要約と、道のりの長さ・歩く時間・階段の回数、道のりの図、<b>曲がる所・改札・階段ごとの区切りの一覧</b>（目印つき。例: きっぷ売り場のところで右へ曲がる）</li>
+        <li>一覧の行を押すと、<b>その場所の景色</b>に飛びます。実際に歩く前の予習に</li>
+        <li><span class="o">「ひとつずつ見る」</span>は、区切りごとに止まり、「次へ ▶」で次の区切りまで進みます。「続けて再生」は、同じ道を同じ速さで最後まで再生します</li>
+        <li>歩いた道には<span class="o">オレンジの足あと</span>（床と小さな地図）、行き先には<b>光の柱</b>が出ます。上の案内の札に、残りの長さと次の区切りが出ます</li>
+        <li>下の帯で<b>道順・一時停止・再開・やめる</b>。歩く操作をすると止まり、<b>そこから自分で歩けます</b></li>
+        <li>道すじ（0.25 秒ごとの位置と向き）は、リンクの <code>#rec=</code> の後ろに縮めて入っています。<b>サーバには何も残りません</b>。アカウントも要りません</li>
+        <li>録画は 10 分まで。行き先を案内中なら、行き先の名前も入ります</li>
+      </ul>
+    </div>
+    <figure class="phone"><img src="manual/21_route_panel.jpg" alt="道順の画面。要約、道のりの図、区切りの一覧" loading="lazy"><figcaption>再生リンクを開いたときの道順の画面（スマホ）</figcaption></figure>
+  </div>
+  <div class="two">
+    <figure><img src="manual/22_step.jpg" alt="ひとつずつ見るで区切りに止まった画面" loading="lazy"><figcaption>「ひとつずつ見る」: 区切りで止まり、上の札に「ここで…」。下の「次へ ▶」で次の区切りへ</figcaption></figure>
+    <figure><img src="manual/07_replay.jpg" alt="再生中の画面。床にオレンジの足あと" loading="lazy"><figcaption>「続けて再生」: 床にオレンジの足あと、上の札に残りの長さと次の区切り</figcaption></figure>
+  </div>
+  <h3>再生リンクの例</h3>
+  <div class="links"><!--LINKS-->
+    <a href="https://tyra0119.github.io/pj_Ekisanpo/?st=ikebukuro#rec=znZLdTsMwDEY_x2GaQLvhhrfgBbnneRFCE1XTGJ22ybrRSQhVso5_4jifa0-Kd3-1lzepSLJJWql0mnZoL1t0hgZiIzQSm6nIqkbl0CfmjBnkscRGaJKnxVQlV8hdWiktJGIFqkudk23FoZQwmVm80XzMLjQ33SaeoRN0hA6YB9wM8SnJq4xJbSEPSbky0DW1upn0D_JQ7He-d-Xf6IP2X1z0DQ2r7FUFJQu6VHSJLl1sBfPfwt4qyZJStk6pEcbyFZkbJd5op2RLdid7c1EnczvhPuIeGfKy1QN_Seb5zvPTutXoe5up6_cD"><b>池袋</b> 中央改札1 → 5番線 <small>（40 秒の道すじ・313 文字）</small></a>
+    <a href="https://tyra0119.github.io/pj_Ekisanpo/?st=ikebukuro#rec=z7ZfLbhNBEEVvVbVxAmQDC36DL-LvWcKCSIgk3V3o9mvs8dgeRyGA5F6UTterHzOqmpF3ePq8-SKf7pEMQqHIiht4wJZiAxgMCF0Ip0rnIsyAMUUVZnCSQwN1SmuY-20p3tAQ6BIYZtUQpK8XBDRBqmAogu8QnY7rsEZn-9a1YTPdsxY3knIH7ZTm9aj9RJnTEpbHTleSZd5frumnVJ3op7lGCDSNNYpIC1QiUl9DT_otTecRp6dTxHm_boiMyAgJmeS0-vDzdkPjOg_JT1oPL_t5T-bI07pwycvpz-3-zDkODPICuz9_ddPiF-359Z7lX8r3aid_iXzfme-e9Iv0QHqiNXKa2I8ym0gmgeQLhEYU0lrRB9J70i2tpRVtSAGm7HqlKudRlRutfcNOFe5Whv_pt-5sgo-03tHvlrQlBVLpagaP_JhIEDiLtMd-k31MdB3XcR3_y7CMRyAiUiSAn1uIcAo0SpWwa9jVAbKgW_I7qpOhyxS1yPAzL8cq2nTSOXeaiy6SqBPqhDodSYUGTX2TmvCV9I30g_STfg-MeGQVi7UBqdUu1H5-ep_x0YB8txXNm5KSlDqhtZCupP2IkiUs0H7EokujO9JbqMkNz1H-1Upv3MD4g1IKfG2Qs_-U0d9-Aw"><b>池袋</b> タイトーステーション → 5番線 <small>（184 秒の道すじ・647 文字）</small></a>
+    <a href="https://tyra0119.github.io/pj_Ekisanpo/?st=ikebukuro#rec=znZNbTgMxDEVvkpkBKvqBUMUu2Aq7YrMgPgCpUpnY6CiddF6tKD_R8UOWfe2Enfw1PYenFyWX1PAkWyFXuBAd5z1g3mPeQR3UQQ3RJO8V5VlR1itAmpIKOWRZH9A3vj3RA_QD9VKWUdQob2qsdOCVBHklzWk2whB9hLbQaYQWSoo8s-4dstrzZI4wmuhMytrQC_KsN8wvzD10gHoCPWQ06TTpUw18dfIr1LiS5lUu38uCttCGUrcU7aAOatG-Zd6EYKnQoH0otHZNdtK-7sNmC8hL2U95o5Sj7x3fJ-awinqTlpXLOQ7a-_mb_Ivi45QNdFM-U-P8KFMkOZIcFJg85IEiPQd6DlOK__TxrBbt1RCIhULmYUcR0vjHx7qF445-AQ"><b>池袋</b> 中央改札1 → 多機能トイレ <small>（58 秒の道すじ・387 文字）</small></a>
+    <a href="https://tyra0119.github.io/pj_Ekisanpo/?st=tokyo#rec=zrZZbktsgEEWbRta8alJZwSwh-99UvlKTjG3RpA5IWGJAtjP56bp9b78AFci9yXQ8_Ijv38QNIqJeJCNX0IrrChdu6yb0mRvhBpDCKcjBuYx8SlMR0OxuuDXad9OQ_ka1dqu0nqol5Aa127JZpad23dXMjQkqdVXlHrXal_4EbdflU9V0tNtDrqfXzTrq3W0F-46Q5hu0s0PNAq313tg3ZQzVce_PlzK-0G0vbgQNIM0m7f2g-QCcDI44WVB2G6hW5ca4SpXPwVeqSEftV5FbZvHZeCcHphpwx-IexBu7FtgwIy1gQBrEcA3X4aZluRLi5gJBPLke9B3hBfRExigycQkGGcSICzSyIE4CPTKiXjJmGUUEKSEbbo47SpjkDAoIyRiqZSSTxGLIK-hiKBUnUdxkDnDPoGReJQZ5od6LTFGeJTh5kEnlIOZZDN-fcQwhGZUP0ElM5YwbZHIS4Ixco0qkbQRJdvMosUw2oz9wJ1xWR6lIAXKDYULZnItrZYfK_n3e3atqJWyDa7Xrrg_vWo8q-GZ1t0etdt1qXxpVqo2oquyr3R599brbnKDXY__0r5zvv53-XV_YhlOQglwR1ndEsOXyqE1ocA11sqXbdHduy0yhUe8LlVfz_YfKVkykSrpFZ7R8SNXNGrlZ577GvRRQjOgVsj3O4EKFrMHVaqNoQtbgLgWsUbTFNdS7ut27QLeqZyH8hjuCjqATB3Bi7z94Z468oRMvZ8DE-f3lPLI7o_l1XriEfsL9An2AjqBprscD6XmA1FNAMeWHWbdu_6--JyzoFfUJ9Aj3ADrAjfymDIxxzlP5eaoz5n2eWXA9MyuLTpP6GEUxnmWqt8QlxA9fQRcOowgZ-djgSoY2cpsZF67KyFVeUZ-JewSNLD_9i47iY155-j1SGbjSlOtrOcEZ_QU"><b>東京</b> 丸の内地下中央口改札 → S1番線 <small>（187 秒の道すじ・924 文字）</small></a>
+    <a href="https://tyra0119.github.io/pj_Ekisanpo/?st=shinjuku#rec=zrVNbbsMwDKMcd2mL_uxgO9RusVvuY8X6iGUNtI0hSe0sbfdDkDQtSEosB2B3eZe3D8QAIOotKMESS5FIaIUzVHLaDOsotyf0hA2hy6AKRyZQg0MwAAFZJoa2p-NTVG5MvNa1mbd8OvdWdHBX5Sfm0BVVnulgcdTV23iw8oL3SXakd6K8Ug5kA4PKTCQzSIBRWq4lo6YpA-R3EKEcNyj13HRt_-m90juQbQk9YUPP55eSnwtfRQbj-5gVKbuSv_6DpmeVRpt_4o23p9zxRk_2QuiLRwYPT-hgnjvt4CgBeBHAOwCdIxMUmb2prHqS7k5kqVfx7qv3RflNdmbuyp4TDFB-EuXwAYgIAiOzsiHJGzL8AA"><b>新宿</b> 東改札 → 14番線 <small>（72 秒の道すじ・367 文字）</small></a>
+  </div>
+  <h3>動画</h3>
+  <p>録画中の画面を動画（Chrome などでは mp4）にもします。共有の画面でそのまま送るか、保存できます。</p>
+  <div class="note">案内中の画面の右上の共有ボタン（<svg viewBox="0 0 24 24" width="14" height="14" style="vertical-align:-2px"><circle cx="18" cy="5" r="3" fill="currentColor"/><circle cx="6" cy="12" r="3" fill="currentColor"/><circle cx="18" cy="19" r="3" fill="currentColor"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" stroke="currentColor" stroke-width="2"/></svg>）では、<b>出発地と行き先</b>のリンク（<code>?st=ikebukuro&amp;from=中央改札1&amp;to=5番線</code>）も送れます。開くと出発地に立ち、行き先の案内が始まります。</div>
+</section>
+
+<section>
+  <h2><span class="no">4</span>出発・行き先と道案内</h2>
+  <div class="two">
+    <figure><img src="manual/02_dest_panel.jpg" alt="出発・行き先の画面" loading="lazy"><figcaption>「出発・行き先」の画面。上の 2 行で出発（初めはいまいる所）と行き先を選ぶ</figcaption></figure>
+    <figure><img src="manual/03_stairs.jpg" alt="床の矢印と階段の下の番線の札" loading="lazy"><figcaption>床の矢印と、上の案内（行き先・残りの長さ・次の区切り）。階段の下に番線と方面</figcaption></figure>
+  </div>
+  <div class="wide">
+    <div>
+      <p>上の案内の札の 3 行目（青い字）に、<b>次の区切り</b>が出ます。区切りは、曲がる所・改札を通る所・階段やエスカレーターで上り下りする所・着く所です。曲がる所は、そばにある札（改札・出口・トイレ・コインロッカー・きっぷ売り場など）を<b>目印</b>にします。</p>
+      <ul>
+        <li>例: 「約 20 m 先、きっぷ売り場のところで右へ曲がる」「まもなく、中央改札1を通る（改札の中へ）」「ここで右へ曲がる」「約 12 m 先、階段で 1F へ上る」</li>
+        <li>行き先には<b>光の柱</b>が立ちます。同じ階にいるときは、壁の向こうでも薄く見えます</li>
+      </ul>
+    </div>
+    <figure><img src="manual/23_beacon.jpg" alt="行き先の光の柱" loading="lazy"><figcaption>行き先（多機能トイレ）の光の柱。上の札に次の区切りと目印</figcaption></figure>
+  </div>
+  <ul>
+    <li>行き先にできるもの: 改札・ホーム（番線と方面）・トイレ・エレベーター・<b>きっぷ売り場・精算所・コインロッカー・ATM・売店・案内所・授乳室・両替所</b>・地下街の出口・待ち合わせ場所・お店・ほかの会社の改札（推定）。名前で探せます（例: 出口 9、トイレ、山手線、券売機、ロッカー）</li>
+    <li>「案内を始める」で出発地へ移動してから案内します。行き先を選ばず出発だけなら「ここへ移動」</li>
+    <li>行き先に着くと「到着しました」。道が見つからないときは「ここからの道が見つかりません」（データの上で通路がつながっていない所）</li>
+    <li>行き先は、右下の小さな地図からも選べます（タップして「行き先にする」）</li>
+    <li>改札の外から外へ行くときは、なるべく改札を通らない道を案内します（データの上で外の通路がつながっていない所は、改札の中を通ります）</li>
+    <li>案内をしていなくても、ホームへの<b>階段・エスカレーターの上り口と下り口の上に、番線・路線・方面の札</b>が出ます</li>
+  </ul>
+</section>
+
+<section>
+  <h2><span class="no">5</span>駅の中</h2>
+  <p><b>ホーム</b>: 番線ごとに路線の色の電車が入る・止まる・出ます。天井から下がる<b>発車標</b>には先発・次発の時刻・行先・両数が出て、電車が入ってくると「電車がまいります」、止まっているあいだは「発車します」。<b>駅名標</b>には駅名・よみ・駅番号と、その番線の<b>つぎの駅</b>が出ます。</p>
+  <div class="two">
+    <figure><img src="manual/04_platform.jpg" alt="ホームと電車" loading="lazy"><figcaption>ホーム: 番線ごとに路線の色の電車が入る・止まる・出る</figcaption></figure>
+    <figure><img src="manual/27_departure.jpg" alt="5番線の発車標" loading="lazy"><figcaption>発車標: 先発・次発の時刻・行先・両数（時刻はホームの電車の動きと同じ）</figcaption></figure>
+    <figure><img src="manual/28_name_board.jpg" alt="5番線の駅名標" loading="lazy"><figcaption>駅名標: 駅名・よみ・駅番号と「つぎは 目白」</figcaption></figure>
+    <figure><img src="manual/18_down_sign.jpg" alt="ホームへの下り口の上の、1番線 山手線 東京・上野方面の札" loading="lazy"><figcaption>ホームへの下り口: 上に番線・路線・方面の札（品川駅 2F）</figcaption></figure>
+  </div>
+  <p><b>案内看板と乗車位置</b>: 通路の分かれ道の手前には、天井から<b>案内看板</b>が下がっています。改札（黄色）とホームの番線（黒）へ、その分かれ道からどちらへ進むかを矢印で示します（行き先を選ばなくても見えます）。ホームの床には、路線の色の枠と三角の<b>乗車位置の印</b>があります。</p>
+  <div class="two">
+    <figure><img src="manual/29_guide_sign.jpg" alt="分かれ道の吊り下げの案内看板" loading="lazy"><figcaption>案内看板: 「← 南改札・中央改札2　← 1〜4番線　↑ 5・6番線　→ 7・8番線」のように、改札は黄色・ホームは黒</figcaption></figure>
+    <figure><img src="manual/30_boarding_mark.jpg" alt="ホームの床の乗車位置の印" loading="lazy"><figcaption>乗車位置の印: ホームドアの手前の床に、路線の色の枠と線路の側を指す三角</figcaption></figure>
+  </div>
+  <p><b>駅の設備</b>: コインロッカー・券売機・精算機・ATM・両替機は壁ぎわに並ぶ箱、売店・案内所はカウンターで、上に札が出ます（壁ぎわに置けない所は札だけ）。どれも行き先に選べます。</p>
+  <div class="two">
+    <figure><img src="manual/24_machines.jpg" alt="ATM と券売機の並び" loading="lazy"><figcaption>券売機（緑の帯「きっぷ」）と ATM（青い帯）</figcaption></figure>
+    <figure><img src="manual/26_fare.jpg" alt="改札のそばの精算機" loading="lazy"><figcaption>精算機（黄色い帯「精算」）。左は改札機</figcaption></figure>
+    <figure><img src="manual/25_kiosk.jpg" alt="売店のカウンター" loading="lazy"><figcaption>売店（赤い帯・品物の棚）。右奥に ATM とコインロッカー</figcaption></figure>
+    <figure><img src="manual/19_locker.jpg" alt="立体のコインロッカーと ATM・券売機" loading="lazy"><figcaption>コインロッカー（扉の並んだ箱）と ATM・券売機（池袋 北改札のそば）</figcaption></figure>
+  </div>
+  <div class="two">
+    <figure><img src="manual/11_toilet.jpg" alt="多機能トイレの入口" loading="lazy"><figcaption>トイレ: 扉の所から入る。札は扉の上</figcaption></figure>
+    <figure><img src="manual/12_elevator.jpg" alt="エレベーターのかごの中" loading="lazy"><figcaption>エレベーター: かごに入ると階のボタン。押すと上り下りする</figcaption></figure>
+    <figure><img src="manual/10_mall.jpg" alt="池袋の地下街" loading="lazy"><figcaption>地下街: 池袋・東京・新宿は、JR の地下 1 階と地下街をそのまま歩いて行き来できる</figcaption></figure>
+    <figure><img src="manual/20_exit_sign.jpg" alt="地下街の出口 9 の階段の上り口の札" loading="lazy"><figcaption>地下街の出口: 地上へ上る階段の上り口の上に、出口の番号と「この先は地上」</figcaption></figure>
+    <figure><img src="manual/13_noentry.jpg" alt="この先は地図データの範囲外です、の札" loading="lazy"><figcaption>行けない所の札: 地下街のデータの範囲外（となりのビルなど）と、地上へ上る出口</figcaption></figure>
+    <figure><img src="manual/14_tokyo.jpg" alt="東京駅の地下" loading="lazy"><figcaption>東京駅は地上 2 階から地下 5 階まで。小さな地図の左で階を切り替え</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2><span class="no">6</span>駅の切り替えと URL</h2>
+  <div class="wide">
+    <div>
+      <p>左上の駅名を押すと、6 駅を切り替えられます。URL でも開けます。</p>
+      <table>
+        <tr><th><code>?st=tokyo</code></th><td>駅（ikebukuro・tokyo・shinjuku・shibuya・shinagawa・takanawa_gateway）</td></tr>
+        <tr><th><code>&amp;from=…&amp;to=…</code></th><td>出発地と行き先の名前（「5番線」のように先頭だけでもよい）</td></tr>
+        <tr><th><code>#rec=…</code></th><td>再生リンクの道すじ</td></tr>
+      </table>
+    </div>
+    <figure><img src="manual/15_stations.jpg" alt="駅を切り替える画面" loading="lazy"><figcaption>駅を切り替える</figcaption></figure>
+  </div>
+</section>
+
+<section>
+  <h2><span class="no">7</span>使っているデータ</h2>
+  <table>
+    <tr><th>JR東日本 構内地図データ</th><td>公共交通オープンデータセンター（ODPT）で 2026-10-26 に公開（JR東日本コンサルタンツ）。階ごとの床の面・扉・改札機・設備（トイレ・きっぷ売り場・コインロッカーなど）。<b>公共交通オープンデータチャレンジ限定ライセンス</b></td></tr>
+    <tr><th>JR東日本 GTFS-Pathways</th><td>同。改札口・乗車位置・階段・エスカレーター・エレベーターの経路網、番線ごとの路線と方面（停車順）</td></tr>
+    <tr><th>3D都市モデル（PLATEAU）</th><td>国土交通省。豊島区・千代田区・中央区・新宿区（2025年度）の地下街モデル LOD4（床・壁・天井・柱）</td></tr>
+    <tr><th>OpenStreetMap</th><td>© OpenStreetMap contributors（ODbL）。地下街の出口・待ち合わせ場所・お店・ほかの会社の改札。新宿の地下 1 階の通路のうち PLATEAU の地下街モデルの外（メトロプロムナード・新宿三丁目・西新宿の方など）</td></tr>
+  </table>
+  <h3>気をつけること</h3>
+  <ul>
+    <li>壁は、構内地図の床の面の境目からの<b>推定</b>です。実際の駅とは形や見た目が違う所があります。地下 1 階の柱は地下街モデル（PLATEAU）のものを立てています（地上の階の柱は入っていません）。案内表示・お店の中は入っていません</li>
+    <li>新宿の地下街は、PLATEAU の地下街モデルが駅の周り約 500 m だけなので、その外の地下 1 階の通路は OpenStreetMap の通路の線から作った<b>簡単な通路</b>（床・壁・天井だけ。幅と高さは推定）です</li>
+    <li>ほかの会社の改札（東京メトロ・東武など）は駅の中のデータが無いので、位置と形は推定です</li>
+    <li>データの食い違いで、通れない階段・道が見つからない所が少しあります</li>
+  </ul>
+</section>
+
+<footer>エキさんぽ — 公共交通オープンデータチャレンジ2026 応募作品。<a href="./">https://tyra0119.github.io/pj_Ekisanpo/</a></footer>
+</main>
+</body>
+</html>

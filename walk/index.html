@@ -1,0 +1,184 @@
+<!doctype html>
+<html lang="ja">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
+<title>エキさんぽ</title>
+<meta name="description" content="JR の駅（池袋・東京・新宿・渋谷・品川・高輪ゲートウェイ）と地下街を、人の目線で自由に歩き回れる立体の構内図">
+<link rel="stylesheet" href="src/style.css?v=mvuc2c7v">
+<script type="importmap">
+{ "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
+</script>
+</head>
+<body>
+<canvas id="view"></canvas>
+
+<div id="compass" aria-hidden="true"><canvas id="compassCv"></canvas></div>
+
+<header id="top">
+  <button id="stationBtn" class="brand" type="button" aria-label="駅を切り替える"><b>エキさんぽ</b><span id="stationName">駅</span><span class="chev">▾</span></button>
+  <div id="floor" class="pill">B1</div>
+  <div id="fare" class="pill fare out">改札外</div>
+</header>
+
+<div id="leftBtns">
+  <button id="destBtn" class="btn primary" type="button">出発・行き先</button>
+  <button id="recBtn" class="btn" type="button"><span class="recDot"></span><span id="recLabel">録画</span></button>
+  <button id="lostBtn" class="btn" type="button">迷ったら</button>
+</div>
+
+<div id="replayBar" hidden>
+  <span id="replayTitle">足あとを再生中</span>
+  <button id="replayList" type="button" aria-label="道順の一覧">道順</button>
+  <button id="replayPlay" type="button" aria-label="一時停止">❚❚</button>
+  <button id="replayEnd" type="button" aria-label="再生をやめる">✕</button>
+  <div class="bar"><div id="replayProg"></div></div>
+</div>
+
+<div id="sharePanel" hidden>
+  <div class="sheet">
+    <div class="head"><b>録画を共有</b><button id="shareClose" class="x" type="button" aria-label="閉じる">✕</button></div>
+    <p class="note" id="shareInfo"></p>
+    <div class="grp">再生リンク（歩いた道すじ。開くと同じ道を人の目線で再生）</div>
+    <div class="row">
+      <button id="linkShare" class="btn primary" type="button">リンクを送る</button>
+      <button id="linkCopy" class="btn" type="button">コピー</button>
+    </div>
+    <div id="videoBox">
+      <div class="grp">動画（この画面の録画）</div>
+      <video id="videoPrev" playsinline controls muted></video>
+      <div class="row">
+        <button id="videoShare" class="btn primary" type="button">動画を送る</button>
+        <a id="videoSave" class="btn" download>保存</a>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="guide" hidden>
+  <div id="arrow"><svg viewBox="0 0 40 40" width="44" height="44"><path d="M20 3 L34 34 L20 26 L6 34 Z" fill="currentColor"/></svg></div>
+  <div class="txt">
+    <div id="gName"></div>
+    <div id="gDist"></div>
+    <div id="gHint"></div>
+  </div>
+  <button id="gShare" class="x" type="button" aria-label="案内を共有" title="出発地と行き先をリンクで送る"><svg viewBox="0 0 24 24" width="18" height="18"><circle cx="18" cy="5" r="3" fill="currentColor"/><circle cx="6" cy="12" r="3" fill="currentColor"/><circle cx="18" cy="19" r="3" fill="currentColor"/><path d="M8.6 13.5l6.8 4M15.4 6.5l-6.8 4" stroke="currentColor" stroke-width="2"/></svg></button>
+  <button id="gClose" class="x" type="button" aria-label="案内をやめる">✕</button>
+</div>
+
+<div id="mini">
+  <canvas id="miniCv"></canvas>
+  <div id="floorPick" class="floorPick"></div>
+  <button id="mBig" class="bigBtn" type="button" aria-label="地図を大きく"><svg viewBox="0 0 24 24" width="18" height="18"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5" fill="none" stroke="#444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  <div class="mapBtns">
+    <button id="mCompass" type="button" aria-label="北を上に"><svg viewBox="0 0 24 24" width="22" height="22"><g id="needle"><path d="M12 2 L16 12 L8 12 Z" fill="#d93025"/><path d="M12 22 L8 12 L16 12 Z" fill="#9aa0a6"/></g></svg></button>
+    <button id="mLocate" type="button" aria-label="現在地"><svg viewBox="0 0 24 24" width="20" height="20"><circle cx="12" cy="12" r="4" fill="#1a73e8"/><circle cx="12" cy="12" r="8" fill="none" stroke="#1a73e8" stroke-width="2"/><path d="M12 1v4M12 19v4M1 12h4M19 12h4" stroke="#1a73e8" stroke-width="2"/></svg></button>
+    <div class="zoom">
+      <button id="mIn" type="button" aria-label="拡大">＋</button>
+      <button id="mOut" type="button" aria-label="縮小">−</button>
+    </div>
+  </div>
+</div>
+
+<div id="miniPop" hidden>
+  <div class="mpHead"><b id="mpName"></b><button id="mpClose" class="x" type="button" aria-label="閉じる">✕</button></div>
+  <div class="row"><button id="mpDest" class="btn primary" type="button">行き先にする</button><button id="mpGo" class="btn" type="button">ここへ移動</button></div>
+</div>
+
+<div id="elev" hidden></div>
+<div id="toast" hidden></div>
+
+<div id="stick" hidden><div class="knob"></div></div>
+
+<div id="dpad" aria-label="歩く操作">
+  <button type="button" data-k="ArrowUp" class="u" aria-label="前へ">▲</button>
+  <button type="button" data-k="ArrowLeft" class="l" aria-label="左を向く">◀</button>
+  <button type="button" id="runBtn" class="c" aria-label="走る">走る</button>
+  <button type="button" data-k="ArrowRight" class="r" aria-label="右を向く">▶</button>
+  <button type="button" data-k="ArrowDown" class="d" aria-label="後ろへ">▼</button>
+</div>
+
+<div id="routePanel" hidden>
+  <div class="sheet">
+    <div class="head"><b>道順</b><button id="routeClose" class="x" type="button" aria-label="閉じる">✕</button></div>
+    <div id="routeTitle"></div>
+    <p id="routeSum" class="note"></p>
+    <canvas id="routeMap"></canvas>
+    <ol id="routeSteps"></ol>
+    <div class="row">
+      <button id="routeStepBtn" class="btn primary" type="button">ひとつずつ見る</button>
+      <button id="routePlayBtn" class="btn" type="button">続けて再生</button>
+    </div>
+  </div>
+</div>
+
+<div id="lostPanel" class="sheetWrap" hidden>
+  <div class="sheet">
+    <div class="head"><b>迷ったら</b><button id="lostClose" class="x" type="button" aria-label="閉じる">✕</button></div>
+    <button id="lostWhere" class="bigItem" type="button"><b>いまどこ？</b><small>近くに見える看板（出口の番号・改札・番線など）を選んで、アプリの中の自分の場所を合わせる</small></button>
+    <button id="lostHere" class="bigItem" type="button"><b>ここにいますを送る</b><small>今いる場所と向きをリンクで送る。相手は場所の景色と、そこまでの道が分かる</small></button>
+  </div>
+</div>
+
+<div id="herePanel" class="sheetWrap" hidden>
+  <div class="sheet">
+    <div class="head"><b>相手はここにいます</b><button id="hereClose" class="x" type="button" aria-label="閉じる">✕</button></div>
+    <p id="hereInfo" class="hereInfo"></p>
+    <p class="note">相手のいる場所には、オレンジの光の柱が立っています。</p>
+    <button id="hereRoute" class="btn primary wide" type="button">そこまでの道を調べる</button>
+    <button id="hereLook" class="btn wide" type="button">その場所の景色を見る</button>
+  </div>
+</div>
+
+<div id="stationPanel" hidden>
+  <div class="sheet">
+    <div class="head"><b>駅を切り替える</b><button id="stationClose" class="x" type="button" aria-label="閉じる">✕</button></div>
+    <div id="stationList"></div>
+  </div>
+</div>
+
+<div id="destPanel" hidden>
+  <div class="sheet">
+    <div class="head">
+      <b id="destTitle">出発・行き先</b>
+      <button id="destClose" class="x" type="button" aria-label="閉じる">✕</button>
+    </div>
+    <div id="routeRows">
+      <button type="button" class="rrow" data-m="from"><span class="lab">出発</span><span id="fromVal" class="val">いまいる所</span><span class="chev">›</span></button>
+      <button type="button" class="rrow" data-m="to"><span class="lab">行き先</span><span id="toVal" class="val">選んでください</span><span class="chev">›</span></button>
+    </div>
+    <p id="destHint" class="note destHint" hidden></p>
+    <input id="destFilter" type="search" placeholder="名前で探す（例: 出口 9、トイレ、山手線、きっぷ、ロッカー）" autocomplete="off">
+    <div id="destList"></div>
+    <button id="goBtn" class="btn primary" type="button" disabled>案内を始める</button>
+  </div>
+</div>
+
+<div id="help">
+  <div class="sheet">
+    <b>エキさんぽ</b>
+    <p><span id="helpStation">JR の駅</span>と地下街を、人の目線で歩き回れます。左上の駅名を押すと、ほかの駅（池袋・東京・新宿・渋谷・品川・高輪ゲートウェイ）に切り替えられます。</p>
+    <ul>
+      <li class="pc"><kbd>W</kbd><kbd>A</kbd><kbd>S</kbd><kbd>D</kbd>・矢印キーで歩く、<kbd>Shift</kbd> で速く</li>
+      <li class="pc">画面をドラッグで見回す</li>
+      <li class="touch">左下の十字キーで歩く（▲▼ で前後、◀▶ で向きを変える、真ん中で走る）。左側を押したまま動かしても歩ける</li>
+      <li class="touch">右側をなぞると見回す</li>
+      <li>右下の地図をタップすると「行き先にする」「ここへ移動」を選べる（改札・出口・トイレなどの印でも、印の無い所でも）。左の 2F・1F・B1 で階を切り替え、右上のボタンで地図を大きく。現在地のボタンをもう一度押すと進む向きが上に（方角のボタンで北が上に戻る）</li>
+      <li>「出発・行き先」で出発（いまいる所のままでもよい）と行き先（改札・ホーム・トイレ・エレベーター・地下街の出口やお店）を選び、「案内を始める」で床の矢印と画面上の矢印の案内。上の札に次の曲がる所・改札・階段と目印、行き先には光の柱</li>
+      <li>左上の「改札内・改札外」で、いまいる所が改札の中か外かが分かる</li>
+      <li>迷ったら「迷ったら」: 見えている看板を選んで自分の場所を合わせる（いまどこ？）、今いる場所をリンクで送る（ここにいます）</li>
+      <li>いちばん上の帯で、向いている方角（東西南北）と、駅のまわりの目印（池袋ならサンシャインシティ・ホテルメトロポリタンなど）の方向が分かる</li>
+      <li>壁や改札機にはぶつかります。改札機のあいだを通り抜けてください</li>
+    </ul>
+    <p id="helpCredit" class="note"></p>
+    <p class="note"><a href="manual.html" target="_blank" rel="noopener">使い方（録画と共有・URL・データ）</a>　版: <span id="appVer">10/30 11:08（mvuc2c7v）</span></p>
+    <button id="helpOk" class="btn primary" type="button">歩きはじめる</button>
+  </div>
+</div>
+
+<footer id="credit"></footer>
+<div id="loading">読み込み中…</div>
+
+<script type="module" src="src/app.js?v=mvuc2c7v"></script>
+</body>
+</html>

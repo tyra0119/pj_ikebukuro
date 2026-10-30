@@ -1,0 +1,209 @@
+:root {
+  --bg: #1d2329;
+  --panel: rgba(255, 255, 255, 0.94);
+  --ink: #1f2328;
+  --sub: #5f6670;
+  --accent: #0b8f4d;   /* JR東日本の緑に寄せる */
+  --line: #d9dde1;
+  --shadow: 0 2px 10px rgba(0, 0, 0, 0.18);
+}
+@media (prefers-color-scheme: dark) {
+  :root { --panel: rgba(32, 36, 41, 0.94); --ink: #eef0f2; --sub: #a9b0b8; --line: #3a4048; }
+}
+* { box-sizing: border-box; }
+html, body { margin: 0; height: 100%; overflow: hidden; background: var(--bg); font-family: system-ui, -apple-system, "Hiragino Sans", "Noto Sans JP", "Yu Gothic UI", sans-serif; color: var(--ink); }
+#view { position: fixed; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; }
+button { font: inherit; color: inherit; cursor: pointer; }
+
+/* 方角の帯（いちばん上）。左上のボタン・案内の札はその下 */
+#compass { position: fixed; left: 50%; transform: translateX(-50%); top: max(6px, env(safe-area-inset-top)); width: min(calc(100vw - 24px), 640px); height: 28px; border-radius: 14px; overflow: hidden; background: rgba(28, 35, 51, 0.78); box-shadow: var(--shadow); pointer-events: none; z-index: 5; }
+#compass canvas { width: 100%; height: 100%; display: block; }
+#top { position: fixed; top: calc(max(6px, env(safe-area-inset-top)) + 36px); left: 12px; display: flex; gap: 8px; align-items: center; pointer-events: none; }
+#top > * { pointer-events: auto; }
+button.brand { border: none; font: inherit; color: inherit; cursor: pointer; }
+.brand .chev { font-size: 11px; color: var(--sub); }
+.brand { background: var(--panel); border-radius: 10px; padding: 6px 12px; box-shadow: var(--shadow); display: flex; gap: 8px; align-items: baseline; }
+.brand b { color: var(--accent); font-size: 17px; }
+.brand span { font-size: 13px; color: var(--sub); }
+.pill { background: #222; color: #fff; border-radius: 8px; padding: 6px 10px; font-weight: 700; font-size: 15px; box-shadow: var(--shadow); min-width: 46px; text-align: center; }
+
+.pill.fare { font-size: 14px; min-width: 0; transition: background 0.3s; }
+.pill.fare.in { background: #0b8f4d; }
+.pill.fare.out { background: #6b737b; }
+.btn { border: none; border-radius: 22px; padding: 10px 18px; font-weight: 700; box-shadow: var(--shadow); background: var(--panel); }
+.btn.primary { background: var(--accent); color: #fff; }
+#leftBtns { position: fixed; left: 12px; top: calc(max(6px, env(safe-area-inset-top)) + 82px); display: flex; flex-direction: column; gap: 8px; align-items: flex-start; }
+#recBtn { display: flex; align-items: center; gap: 6px; }
+.recDot { width: 12px; height: 12px; border-radius: 50%; background: #e0352b; }
+#recBtn.on { background: #e0352b; color: #fff; }
+#recBtn.on .recDot { background: #fff; border-radius: 2px; }
+#replayBar { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(max(12px, env(safe-area-inset-bottom)) + 4px); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 8px 10px 12px; display: flex; gap: 8px; align-items: center; flex-wrap: wrap; width: min(60vw, 360px); }
+#replayBar[hidden] { display: none; }
+#replayBar #replayTitle { font-weight: 700; font-size: 14px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#replayBar button { border: none; background: rgba(127,127,127,0.15); border-radius: 8px; width: 34px; height: 30px; }
+#replayBar .bar { position: absolute; left: 10px; right: 10px; bottom: 5px; height: 3px; background: var(--line); border-radius: 2px; }
+#replayProg { height: 100%; width: 0; background: #f08c00; border-radius: 2px; }
+#sharePanel { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: grid; place-items: end center; z-index: 10; }
+#sharePanel[hidden] { display: none; }
+.sheet .row { display: flex; gap: 8px; margin: 6px 0 4px; }
+.sheet .note { font-size: 13px; color: var(--sub); margin: 0 0 4px; }
+a.btn { text-decoration: none; display: inline-block; }
+#videoPrev { width: 100%; max-height: 32vh; background: #000; border-radius: 8px; }
+.x { border: none; background: transparent; font-size: 18px; padding: 4px 8px; color: var(--sub); }
+
+#guide { position: fixed; left: 50%; transform: translateX(-50%); top: calc(max(6px, env(safe-area-inset-top)) + 36px); background: var(--panel); border-radius: 14px; box-shadow: var(--shadow); padding: 8px 8px 8px 12px; display: flex; gap: 10px; align-items: center; max-width: min(92vw, 420px); }
+#guide[hidden] { display: none; }
+#arrow { color: var(--accent); width: 44px; height: 44px; transition: transform 0.12s linear; }
+#guide .txt { min-width: 0; }
+#gName { font-weight: 700; font-size: 15px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#gDist { font-size: 14px; }
+#gHint { font-size: 14px; font-weight: 700; color: #0b5cad; } /* 次の区切り（曲がる・改札・上り下り）と目印 */
+
+#mini { position: fixed; right: 12px; bottom: calc(max(12px, env(safe-area-inset-bottom))); width: 220px; height: 220px; border-radius: 14px; overflow: hidden; box-shadow: var(--shadow); background: #f4f2ee; touch-action: none; }
+#miniCv { width: 100%; height: 100%; display: block; }
+.mapBtns { position: absolute; right: 6px; bottom: 6px; display: flex; flex-direction: column; gap: 6px; align-items: center; }
+.mapBtns button { width: 34px; height: 34px; border-radius: 8px; border: none; background: #fff; color: #444; box-shadow: 0 1px 4px rgba(0,0,0,0.25); display: grid; place-items: center; font-size: 20px; line-height: 1; padding: 0; }
+/* 地図を大きくするボタン（地図の右上の角。右の 4 つのボタンの列と右の端をそろえる）。大きくしたときは十字キーを隠す（スマホで地図が重なる） */
+.bigBtn { position: absolute; top: 6px; right: 6px; width: 34px; height: 34px; border-radius: 8px; border: none; background: #fff; box-shadow: 0 1px 4px rgba(0,0,0,0.25); display: grid; place-items: center; padding: 0; }
+#mini.big { width: min(520px, calc(100vw - 24px)); height: min(520px, calc(100vh - 160px)); }
+body.miniBig #dpad, body.miniBig #stick { visibility: hidden; }
+.mapBtns .zoom { display: flex; flex-direction: column; border-radius: 8px; overflow: hidden; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+.mapBtns .zoom button { box-shadow: none; border-radius: 0; }
+.mapBtns .zoom button + button { border-top: 1px solid #e3e3e3; }
+.floorPick { position: absolute; left: 6px; top: 6px; display: flex; flex-direction: column; border-radius: 8px; overflow-y: auto; max-height: calc(100% - 12px); scrollbar-width: none; box-shadow: 0 1px 4px rgba(0,0,0,0.25); }
+.floorPick button { width: 34px; height: 28px; border: none; background: #fff; color: #444; font-size: 12px; font-weight: 700; padding: 0; position: relative; }
+.floorPick button + button { border-top: 1px solid #e3e3e3; }
+.floorPick button.on { background: #1a73e8; color: #fff; }
+.floorPick button.me::after { content: ''; position: absolute; right: 3px; top: 3px; width: 5px; height: 5px; border-radius: 50%; background: #1a73e8; }
+.floorPick button.on.me::after { background: #fff; }
+#mLocate.on svg circle:first-child { fill: #1a73e8; }
+#mLocate:not(.on) { color: #888; }
+#mLocate.head { background: #d2e3fc; }
+
+#elev { position: fixed; left: 50%; bottom: 120px; transform: translateX(-50%); background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 10px; display: flex; gap: 8px; align-items: center; }
+#elev[hidden] { display: none; }
+#elev button { border: 2px solid var(--accent); background: transparent; border-radius: 50%; width: 46px; height: 46px; font-weight: 700; }
+#toast { position: fixed; left: 50%; top: 40%; transform: translate(-50%, -50%); background: rgba(0,0,0,0.75); color: #fff; padding: 12px 20px; border-radius: 12px; font-size: 18px; font-weight: 700; pointer-events: none; }
+#toast[hidden] { display: none; }
+
+#stick { position: fixed; width: 110px; height: 110px; margin: -55px 0 0 -55px; border-radius: 50%; background: rgba(255,255,255,0.18); border: 2px solid rgba(255,255,255,0.5); pointer-events: none; }
+#stick[hidden] { display: none; }
+#stick .knob { position: absolute; left: 50%; top: 50%; width: 46px; height: 46px; margin: -23px 0 0 -23px; border-radius: 50%; background: rgba(255,255,255,0.8); }
+
+/* 十字キー（スマホだけ） */
+#dpad { position: fixed; left: 14px; bottom: calc(max(18px, env(safe-area-inset-bottom)) + 10px); width: 150px; height: 150px; display: none; grid-template: repeat(3, 1fr) / repeat(3, 1fr); gap: 3px; touch-action: none; user-select: none; -webkit-user-select: none; }
+body.touch #dpad { display: grid; }
+#dpad button { border: none; border-radius: 12px; background: rgba(255,255,255,0.72); color: #333; font-size: 18px; box-shadow: 0 1px 4px rgba(0,0,0,0.25); touch-action: none; -webkit-touch-callout: none; }
+#dpad button.on { background: var(--accent); color: #fff; }
+#dpad .u { grid-area: 1 / 2; } #dpad .l { grid-area: 2 / 1; } #dpad .c { grid-area: 2 / 2; font-size: 12px; font-weight: 700; border-radius: 50%; } #dpad .r { grid-area: 2 / 3; } #dpad .d { grid-area: 3 / 2; }
+/* スマホ: 出典は一番下に 1 行（全文は説明の画面）。十字キーと地図はその上 */
+body.touch #credit { left: 8px; right: 8px; max-width: none; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+body.touch #dpad { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 14px); }
+body.touch #mini { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 14px); }
+body.riding #view { filter: brightness(0.55); transition: filter 0.4s; }
+#view { transition: filter 0.4s; }
+
+#stationPanel { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: grid; place-items: end center; z-index: 10; }
+#stationPanel[hidden] { display: none; }
+#destPanel, #help { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: grid; place-items: end center; z-index: 10; }
+#destPanel[hidden], #help[hidden] { display: none; }
+.sheet { background: var(--panel); width: min(100vw, 480px); max-height: 75vh; overflow: auto; border-radius: 16px 16px 0 0; padding: 14px 16px calc(16px + env(safe-area-inset-bottom)); box-shadow: var(--shadow); }
+#help { place-items: center; }
+#help .sheet { border-radius: 16px; width: min(92vw, 440px); }
+#help p { margin: 6px 0; }
+#help a { color: var(--accent); font-weight: 700; }
+#help ul { padding-left: 1.2em; margin: 8px 0 14px; line-height: 1.7; font-size: 14px; }
+kbd { border: 1px solid var(--line); border-bottom-width: 2px; border-radius: 4px; padding: 0 5px; font-size: 12px; margin-right: 2px; background: rgba(127,127,127,0.08); }
+body.touch .pc, body:not(.touch) .touch { display: none; }
+.sheet .head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px; }
+/* 出発・行き先の 2 行（押した行の一覧を下に出す） */
+#routeRows { display: flex; flex-direction: column; gap: 6px; margin: 2px 0 8px; }
+.rrow { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: 2px solid var(--line); border-radius: 12px; background: transparent; padding: 9px 12px; }
+.rrow.on { border-color: var(--accent); background: rgba(11,143,77,0.08); }
+.rrow .lab { font-size: 12px; font-weight: 700; color: var(--sub); width: 3.2em; flex: none; }
+.rrow.on .lab { color: var(--accent); }
+.rrow .val { font-weight: 700; font-size: 15px; flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rrow .val.empty { color: var(--sub); font-weight: 400; }
+.rrow .chev { color: var(--sub); font-size: 20px; }
+.item.sel { background: rgba(11,143,77,0.12); border-radius: 8px; }
+#goBtn { width: 100%; margin-top: 8px; padding: 12px; font-size: 16px; }
+#goBtn:disabled { opacity: 0.4; }
+/* 出発地・行き先の画面: 見出し（✕）・切り替え・探す欄は動かさず、一覧だけを動かす */
+#destPanel .sheet { display: flex; flex-direction: column; overflow: hidden; }
+#destPanel .sheet > :not(#destList) { flex: none; }
+#destList { flex: 1 1 auto; overflow-y: auto; min-height: 0; overscroll-behavior: contain; }
+#destFilter { width: 100%; font: inherit; font-size: 15px; padding: 8px 10px; border: 1px solid var(--line); border-radius: 10px; background: transparent; color: var(--ink); margin: 2px 0 4px; }
+.grp { font-size: 12px; color: var(--sub); margin: 12px 0 4px; font-weight: 700; }
+.item { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; background: transparent; padding: 10px 6px; border-bottom: 1px solid var(--line); font-size: 15px; }
+.item small { color: var(--sub); font-size: 12px; }
+.item .tag { font-size: 12px; color: var(--sub); margin-left: auto; white-space: nowrap; }
+.dot { width: 26px; height: 26px; border-radius: 50%; color: #fff; display: grid; place-items: center; font-weight: 700; font-size: 13px; flex: none; }
+
+#credit { position: fixed; left: 8px; bottom: 4px; font-size: 10px; color: rgba(255,255,255,0.75); text-shadow: 0 0 3px #000; max-width: calc(100vw - 250px); pointer-events: none; }
+#loading { position: fixed; inset: 0; display: grid; place-items: center; color: #fff; font-size: 18px; background: var(--bg); z-index: 20; }
+#loading[hidden] { display: none; }
+
+@media (max-width: 600px) {
+  #mini { width: 150px; height: 150px; }
+  #credit { max-width: calc(100vw - 175px); }
+  #replayBar { left: 12px; transform: none; width: calc(100vw - 190px); }
+  /* 小さな地図は縦長に（右の 4 つのボタンと右上の大きくするボタンが重ならず、ボタンのあいだも空けて押し間違えにくく） */
+  #mini { width: 160px; height: 200px; }
+  .mapBtns { gap: 6px; right: 4px; bottom: 4px; }
+  .mapBtns button { width: 32px; height: 32px; font-size: 18px; }
+  .floorPick button { width: 30px; height: 26px; font-size: 11px; }
+  body.touch #replayBar { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 224px); left: 12px; width: calc(100vw - 24px); }
+  /* エレベーターのボタンも十字キー・小さな地図の上に（実機で十字キーと地図に重なっていた） */
+  body.touch #elev { bottom: calc(max(12px, env(safe-area-inset-bottom)) + 224px); }
+  .bigBtn { top: 4px; right: 4px; width: 32px; height: 32px; }
+  #mini.big { width: calc(100vw - 24px); height: min(calc(100vw - 24px), calc(100vh - 300px)); }
+  .brand span { display: none; }
+  /* 案内中は、案内の札を方角の帯のすぐ下に横いっぱいに出し、駅名・ボタンはその下へ（札が左上のボタンに重なっていた） */
+  #guide { left: 12px; right: 12px; transform: none; max-width: none; }
+  /* --guideB: 案内の札の下の端（札の 3 行目が折り返して札が伸びても重ならないように、app.js で札の大きさに合わせる） */
+  body:has(#guide:not([hidden])) #top { top: calc(var(--guideB, 106px) + 6px); }
+  body:has(#guide:not([hidden])) #leftBtns { top: calc(var(--guideB, 106px) + 52px); }
+}
+/* スマホの横向きなど高さの低い画面: 案内の札は右に寄せて左上の駅名・階・改札内外を隠さない。小さな地図とボタンはスマホの縦向きと同じ縦長の大きさに（実機の横向きで確かめた） */
+@media (max-height: 500px) and (min-width: 601px) {
+  #guide { left: auto; right: 12px; transform: none; max-width: min(420px, calc(100vw - 340px)); }
+  #mini { width: 160px; height: 200px; }
+  .mapBtns { gap: 6px; right: 4px; bottom: 4px; }
+  .mapBtns button { width: 32px; height: 32px; font-size: 18px; }
+  .floorPick button { width: 30px; height: 26px; font-size: 11px; }
+  .bigBtn { top: 4px; right: 4px; width: 32px; height: 32px; }
+  #mini.big { width: min(520px, calc(100vw - 360px)); height: calc(100vh - 140px); }
+}
+
+/* 道順（再生リンクを開いたとき）: 要約・道のりの図・区切りの一覧 */
+#routePanel { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: grid; place-items: end center; z-index: 10; }
+#routePanel[hidden] { display: none; }
+#routePanel .sheet { display: flex; flex-direction: column; max-height: 88vh; }
+#routeTitle { font-size: 17px; font-weight: 800; margin: 2px 0 2px; }
+#routeMap { width: 100%; height: 170px; border-radius: 10px; background: #f4f2ee; flex: none; }
+#routeSteps { list-style: none; margin: 8px 0; padding: 0; overflow: auto; flex: 1; min-height: 80px; }
+#routeSteps li button { display: flex; align-items: center; gap: 10px; width: 100%; text-align: left; border: none; background: transparent; padding: 8px 4px; border-bottom: 1px solid var(--line); font-size: 15px; color: inherit; }
+#routeSteps .no { flex: none; width: 24px; height: 24px; border-radius: 50%; background: #f08c00; color: #fff; font-size: 13px; font-weight: 800; display: grid; place-items: center; }
+#routeSteps .no.s { background: #0b8f4d; } #routeSteps .no.g { background: #e8453c; }
+#routeSteps small { color: var(--sub); font-size: 12px; margin-left: auto; white-space: nowrap; }
+#replayBar #replayList { width: auto; padding: 0 8px; font-size: 13px; font-weight: 700; }
+#replayBar #replayPlay.next { width: auto; padding: 0 10px; font-weight: 800; background: #f08c00; color: #fff; }
+#guide.replay #gShare, #guide.replay #gClose { display: none; }
+/* 地図の上の小さな札（行き先にする・ここへ移動） */
+#miniPop { position: fixed; z-index: 6; background: var(--panel); border-radius: 12px; box-shadow: var(--shadow); padding: 8px 10px 10px; width: 230px; }
+#miniPop[hidden] { display: none; }
+#miniPop .mpHead { display: flex; align-items: center; gap: 6px; justify-content: space-between; }
+#miniPop #mpName { font-size: 14px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+#miniPop .row { display: flex; gap: 6px; margin-top: 6px; }
+#miniPop .row .btn { flex: 1; padding: 7px 6px; font-size: 13px; }
+/* 迷ったら（いまどこ？・ここにいます）と、ここにいますのリンクを開いたとき */
+#lostBtn { background: #fff4e0; color: #9a5800; }
+.sheetWrap { position: fixed; inset: 0; background: rgba(0,0,0,0.35); display: grid; place-items: end center; z-index: 10; }
+.sheetWrap[hidden] { display: none; }
+.bigItem { display: block; width: 100%; text-align: left; border: 1px solid var(--line); background: var(--panel); border-radius: 12px; padding: 12px 14px; margin: 8px 0; color: inherit; }
+.bigItem b { display: block; font-size: 16px; }
+.bigItem small { display: block; color: var(--sub); font-size: 13px; margin-top: 2px; }
+.hereInfo { font-size: 17px; font-weight: 800; margin: 4px 0; }
+.btn.wide { display: block; width: 100%; margin-top: 8px; }
+.destHint { background: #fff4e0; color: #7a4600; border-radius: 8px; padding: 8px 10px; margin: 4px 0 6px; }
+#destPanel.where #routeRows, #destPanel.where #goBtn { display: none; }
