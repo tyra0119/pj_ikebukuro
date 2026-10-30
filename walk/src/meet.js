@@ -46,7 +46,9 @@ export async function initMeet(A) {
     if (!partner) return 'あいてを待っています…（リンクを開くと、ここにあいての様子が出ます）';
     const ago = Math.round((Date.now() - partner.recvAt) / 1000), old = partner.t && Date.now() - partner.t > 5 * 60 * 1000;
     const where = partner.l != null && LV[partner.l] ? LV[partner.l].name : '';
-    let t = partner.at ? 'あいてはもう着いています' : partner.n ? `あいてはいま ${partner.k} / ${partner.n - 1}（${where}）、あと約${partner.rem} m` : `あいては${where}にいます（まだ案内を始めていません）`;
+    const pf = partner.from && find(partner.from);
+    const head = pf ? `あいては「${pf.name}」から。` : '';
+    let t = head + (partner.at ? 'あいてはもう着いています' : partner.n ? `あいてはいま ${partner.k} / ${partner.n - 1}（${where}）、あと約${partner.rem} m` : `あいては${where}にいます（まだ出発を選んでいません）`);
     if (cur && !partner.at && partner.n) { const sec = Math.max(cur.rem ?? 0, partner.rem) / 1.25; t += `。そろうまで約${Math.max(1, Math.round(sec / 60))}分`; }
     if (old) t += '（しばらく更新がありません）'; else if (ago > 15) t += `（${ago} 秒前）`;
     return t;
@@ -82,10 +84,10 @@ export async function initMeet(A) {
     if (!cur) return;
     if (!room) { startShare('a', roomId()); const u = new URL(location.href); u.searchParams.set('room', room.id); u.searchParams.set('role', 'a'); history.replaceState(null, '', u); }
     const url = shareURL();
-    if (navigator.share) { try { await navigator.share({ title: '池袋 待ち合わせ案内', text: `${cur.from.name} → ${cur.to.name}（約${Math.max(1, Math.round(cur.r.total / 60))}分）。開くと、お互いの位置と進み具合が見えます`, url }); return; } catch { /* 取り消し */ } }
+    if (navigator.share) { try { await navigator.share({ title: '池袋 待ち合わせ案内', text: `待ち合わせ場所は「${cur.to.name}」。開いて出発を選ぶと道順が出て、お互いの位置と進み具合が見えます`, url }); return; } catch { /* 取り消し */ } }
     try { await navigator.clipboard.writeText(url); toast('リンクをコピーしました'); } catch { toast(url); }
   };
-  const shareURL = () => { const u = new URL(location.href); u.hash = ''; u.searchParams.delete('from'); u.searchParams.delete('to'); u.searchParams.set('mfrom', cur.from.id); u.searchParams.set('mto', cur.to.id); u.searchParams.set('pr', cur.pr); if (room) { u.searchParams.set('room', room.id); u.searchParams.set('role', room.role === 'a' ? 'b' : 'a'); } return u.href; };
+  const shareURL = () => { const u = new URL(location.href); u.hash = ''; u.searchParams.delete('from'); u.searchParams.delete('to'); u.searchParams.set('mto', cur.to.id); u.searchParams.set('pr', cur.pr); if (room) { u.searchParams.delete('mfrom'); u.searchParams.set('room', room.id); u.searchParams.set('role', room.role === 'a' ? 'b' : 'a'); } else u.searchParams.set('mfrom', cur.from.id); return u.href; }; // あいてへのリンク: 待ち合わせ場所と部屋だけ（出発はあいてが選ぶ）。部屋が無いときは自分の案内そのもの
 
   // ---- 経路 → 立体の道筋。地上（国交省の歩道）の点は歩けないので、駅・地下街に入って床のある最初の点から
   function toPts(E) {
@@ -188,11 +190,18 @@ export async function initMeet(A) {
   // URL から: ?mfrom=&mto=&pr=（待ち合わせ案内の共有リンク、meet/ の「立体で歩く」）
   const q = new URLSearchParams(location.search);
   if (q.get('mto')) {
-    if (q.get('mfrom')) fromSel.value = q.get('mfrom');
     toSel.value = q.get('mto');
     if (q.get('pr')) prSel.value = q.get('pr');
-    run(fromSel.value, toSel.value, prSel.value);
-    if (cur && cur.walkFrom >= 0) { const p = cur.pts[cur.walkFrom]; jumpTo(p.x, p.y, p.l, true); }
+    if (q.get('mfrom')) {
+      fromSel.value = q.get('mfrom');
+      run(fromSel.value, toSel.value, prSel.value);
+      if (cur && cur.walkFrom >= 0) { const p = cur.pts[cur.walkFrom]; jumpTo(p.x, p.y, p.l, true); }
+    } else { // あいてのリンク: 出発はあいて自身が選ぶ
+      const t = find(toSel.value);
+      $('meetTitle').textContent = t ? `待ち合わせ場所: ${t.name}（${lvName(t.level)}）` : '';
+      $('meetSum').textContent = '出発（いまいる所に近い地上の場所・出口）を選んで「案内」を押してください。';
+      $('meetSteps').innerHTML = '';
+    }
     $('meetPanel').hidden = false;
   }
   if (q.get('room') && q.get('role')) startShare(q.get('role'), q.get('room'));
