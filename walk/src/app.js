@@ -2,16 +2,16 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuch29p';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuch29p';
-import { addTrains } from './trains.js?v=mvuch29p';
-import { routeSteps, stepLine } from './steps.js?v=mvuch29p';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuci6jn';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuci6jn';
+import { addTrains } from './trains.js?v=mvuci6jn';
+import { routeSteps, stepLine } from './steps.js?v=mvuci6jn';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvuch29p'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvuci6jn'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([

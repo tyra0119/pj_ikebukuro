@@ -61,7 +61,7 @@
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const DATA = ['../data/meet.json?v=mvuch29p', '../data/meet.json?v=mvuch29p'];
+const DATA = ['../data/meet.json?v=mvuci6jn', '../data/meet.json?v=mvuci6jn'];
 const ORIGIN = { lat: 35.7295, lon: 139.7109 };
 const a = 6378137, e2 = 0.00669438002290, phi = ORIGIN.lat * Math.PI / 180, w = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
 const KX = (Math.PI / 180) * (a / w) * Math.cos(phi), KY = (Math.PI / 180) * ((a * (1 - e2)) / w ** 3);
@@ -92,7 +92,8 @@ function cost(l, pr, fareOK) {
   if (pr === 'ev' && (mode === STAIR || mode === ESC)) return Infinity;
   if (pr === 'stair' && (mode === ESC || mode === EV)) s *= 3;
   if (pr === 'esc' && (mode === STAIR || mode === EV)) s *= 3;
-  if (guess) { if (pr === 'ev' && D.nodes[l[0]][2] !== D.nodes[l[1]][2]) return Infinity; s = s * 1.5 + 15; }
+  // 推定の線: 1.5 倍 + 15 秒。段差なしのときの推定の上り下り（出口の階段の位置も、エレベーターの有無もデータに無い）は 3 倍 + 120 秒で通し、手順で断る
+  if (guess) s = pr === 'ev' && D.nodes[l[0]][2] !== D.nodes[l[1]][2] ? s * 3 + 120 : s * 1.5 + 15;
   if (cross) s += 10;
   if (mode === GATE && !fareOK) s += 600; // 改札の中を通り抜ける近道は避ける（運賃がかかる）
   return s;
@@ -208,8 +209,8 @@ function describe(E, from, to) {
       if (exitAt && (s.l0 === 0 || s.l1 === 0)) {
         let en = exitAt; const bm = exitNode >= 0 && markNear(exitNode, 90, 'b', used); if (bm) { used[bm[3]] = 1; en = `${bm[3]}のそばの${en}`; }
         title = `${en}${up ? 'から地上へ出る' : 'から' + lvName(s.l1) + 'へ下りる'}`;
-        detail = s.mode === EV ? '車いすで通れる出口です。' : s.edges.some((e) => e.guess) ? '出口の階段の位置はデータに無いので、近くの通路と結んで案内しています。' : '出口の階段です。エスカレーター・エレベーターがあるかはデータにありません。';
-      } else if (s.edges.some((e) => e.guess)) detail += '。地図データに階段の線が無いので、近くの通路と結んで案内しています。実際の上り下りの場所は少し違うかもしれません';
+        detail = s.mode === EV ? '車いすで通れる出口です。' : s.edges.some((e) => e.guess) ? '出口の階段の位置はデータに無いので、近くの通路と結んで案内しています。' + ($('pr').value === 'ev' ? '段差なしで通れるか（エレベーターがあるか）もデータにありません。' : '') : '出口の階段です。エスカレーター・エレベーターがあるかはデータにありません。';
+      } else if (s.edges.some((e) => e.guess)) detail += '。地図データに階段の線が無いので、近くの通路と結んで案内しています。実際の上り下りの場所は少し違うかもしれません' + ($('pr').value === 'ev' ? '。段差なしで通れるかもデータにありません' : '');
       else if (s.edges.every((e) => e.src === 1)) detail += '（JR東日本の駅構内データ）';
       steps.push({ icon: s.mode === EV ? 'ev' : s.mode === ESC ? 'esc' : 'stair', title, detail, seg: s });
     }
