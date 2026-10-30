@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvuxn8hs';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuxn8hs';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuxn8hs';
-import { addTrains } from './trains.js?v=mvuxn8hs';
-import { routeSteps, stepLine } from './steps.js?v=mvuxn8hs';
-import { initMeet } from './meet.js?v=mvuxn8hs';
+import { initPhoto } from './photo.js?v=mvuz5zc4';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuz5zc4';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuz5zc4';
+import { addTrains } from './trains.js?v=mvuz5zc4';
+import { routeSteps, stepLine } from './steps.js?v=mvuz5zc4';
+import { initMeet } from './meet.js?v=mvuz5zc4';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvuxn8hs'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvuz5zc4'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -1399,21 +1399,24 @@ function updateElev() {
 const mini = { cx: me.x, cy: me.y, s: 1.6, rot: 0, follow: true, head: false, floor: null }; // head: 進む向きを上に（現在地のボタンをもう一度押す）
 const mcv = $('miniCv'), mg = mcv.getContext('2d');
 const paths = {}; // 階ごとの Path2D
+// 図形は 200 個ずつ別の Path2D に分ける（1 つの Path2D に図形をたくさん足すと、数の 2 乗ほど遅くなる。地上の床 88,000 個で読み込みに 12 秒かかった。2026-10-30）
+const chunks = () => { const a = []; let n = 0; a.p = () => { if (n++ % 200 === 0) a.push(new Path2D()); return a[a.length - 1]; }; return a; };
 for (const l of Object.keys(LV)) {
-  const floor = new Path2D(), block = new Path2D(), wall = new Path2D(), mall = new Path2D();
-  const ring = (P, r) => { P.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) P.lineTo(r[i], r[i + 1]); P.closePath(); };
+  const floor = chunks(), block = chunks(), wall = chunks(), mall = chunks();
+  const ring = (A, r) => { const P = A.p(); P.moveTo(r[0], r[1]); for (let i = 2; i < r.length; i += 2) P.lineTo(r[i], r[i + 1]); P.closePath(); };
+  const tri = (A, f, i) => { const P = A.p(); P.moveTo(f[i], f[i + 1]); P.lineTo(f[i + 3], f[i + 4]); P.lineTo(f[i + 6], f[i + 7]); P.closePath(); };
   for (const f of data.floors) if (String(f.l) === l) f.r.forEach((r) => ring(floor, r));
   for (const f of data.blocks) if (String(f.l) === l) f.r.forEach((r) => ring(block, r));
-  for (const w of data.walls) if (String(w[4]) === l) { wall.moveTo(w[0], w[1]); wall.lineTo(w[2], w[3]); }
+  for (const w of data.walls) if (String(w[4]) === l) { const P = wall.p(); P.moveTo(w[0], w[1]); P.lineTo(w[2], w[3]); }
   if (GL != null && Number(l) === GL) {
     const L = data.mall.layout.floor, f = new Float32Array(mallBuf, L[0], L[1]);
-    for (let i = 0; i < f.length; i += 9) if (Math.abs(f[i + 2] - LV[l].z) < 2.5) { mall.moveTo(f[i], f[i + 1]); mall.lineTo(f[i + 3], f[i + 4]); mall.lineTo(f[i + 6], f[i + 7]); mall.closePath(); }
+    for (let i = 0; i < f.length; i += 9) if (Math.abs(f[i + 2] - LV[l].z) < 2.5) tri(mall, f, i);
   }
   // 地上（1F）の街並み: 歩道・道路（地下街のファイルの gfloor。道路は歩道より低い）と建物の輪郭（gbld）
-  const gside = new Path2D(), groad = new Path2D(), gbld = new Path2D();
+  const gside = chunks(), groad = chunks(), gbld = chunks();
   if (l === '1' && data.mall && data.mall.layout.gfloor) {
     const L = data.mall.layout.gfloor, f = new Float32Array(mallBuf, L[0], L[1]), gz = LV[l].z;
-    for (let i = 0; i < f.length; i += 9) { const P = Math.max(f[i + 2], f[i + 5], f[i + 8]) < gz - 0.06 ? groad : gside; P.moveTo(f[i], f[i + 1]); P.lineTo(f[i + 3], f[i + 4]); P.lineTo(f[i + 6], f[i + 7]); P.closePath(); }
+    for (let i = 0; i < f.length; i += 9) tri(Math.max(f[i + 2], f[i + 5], f[i + 8]) < gz - 0.06 ? groad : gside, f, i);
     for (const r of data.gbld || []) ring(gbld, r);
   }
   paths[l] = { floor, block, wall, mall, gside, groad, gbld };
@@ -1435,6 +1438,7 @@ const S2W = (sx, sy) => {
   const u = (sx - W / 2) / mini.s, v = -(sy - H / 2) / mini.s;
   return [mini.cx + c * u + s * v, mini.cy - s * u + c * v];
 };
+const fillAll = (A) => { for (const p of A) mg.fill(p); }, strokeAll = (A) => { for (const p of A) mg.stroke(p); };
 function drawMini() {
   if (mini.follow) { mini.cx = me.x; mini.cy = me.y; }
   if (mini.follow && mini.head) mini.rot = me.yaw;
@@ -1450,15 +1454,15 @@ function drawMini() {
   const gphoto = pl === '1' && photoCity && photoCity.ground; // 写真の街並みのときは航空写真
   if (gphoto) { const e = gphoto.ext; mg.save(); mg.translate(e.w, e.n); mg.scale(1, -1); mg.drawImage(gphoto.canvas, 0, 0, e.e - e.w, e.n - e.s); mg.restore(); }
   else {
-    mg.fillStyle = '#f4f2ed'; mg.fill(P.gside);
-    mg.fillStyle = '#c3c6cb'; mg.fill(P.groad);
-    mg.fillStyle = '#dcd5c8'; mg.fill(P.gbld);
-    mg.strokeStyle = '#c2b9aa'; mg.lineWidth = 0.8 / k; mg.stroke(P.gbld);
+    mg.fillStyle = '#f4f2ed'; fillAll(P.gside);
+    mg.fillStyle = '#c3c6cb'; fillAll(P.groad);
+    mg.fillStyle = '#dcd5c8'; fillAll(P.gbld);
+    mg.strokeStyle = '#c2b9aa'; mg.lineWidth = 0.8 / k; strokeAll(P.gbld);
   }
-  mg.fillStyle = '#fbfaf6'; mg.fill(P.mall);
-  mg.fillStyle = '#ffffff'; mg.fill(P.floor);
-  mg.fillStyle = '#d5cfc4'; mg.fill(P.block);
-  mg.strokeStyle = '#8a8378'; mg.lineWidth = 1.2 / k; mg.stroke(P.wall);
+  mg.fillStyle = '#fbfaf6'; fillAll(P.mall);
+  mg.fillStyle = '#ffffff'; fillAll(P.floor);
+  mg.fillStyle = '#d5cfc4'; fillAll(P.block);
+  mg.strokeStyle = '#8a8378'; mg.lineWidth = 1.2 / k; strokeAll(P.wall);
   mg.fillStyle = 'rgba(224,152,40,0.55)';
   for (const r of ramps2d) if (String(r.la) === pl || String(r.lb) === pl) {
     const len = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]), nx = (-(r.b[1] - r.a[1]) / len) * r.w / 2, ny = ((r.b[0] - r.a[0]) / len) * r.w / 2;
