@@ -107,9 +107,10 @@ defGroup('plFloor', 'PLATEAU 地下街の床（B1）', '#c8b89a', true, (g) => {
   if (!levelOK(-1)) return;
   D.polygons.plateauFloor.forEach((t, i) => { const z = D.polygons.plateauFloorZ[i]; L.polygon([LL(t[0], t[1]), LL(t[2], t[3]), LL(t[4], t[5])], { stroke: false, fillColor: z < 27 ? '#a99b7d' : '#c8b89a', fillOpacity: 0.55, interactive: false }).addTo(g); });
 });
-defGroup('plWall', 'PLATEAU 壁（B1 の歩く高さ。薄い点線 = JR のコンコースの中で使わない壁）', '#5a4a3a', true, (g) => {
+defGroup('plWall', 'PLATEAU 壁（B1 の歩く高さ。薄い点線 = JR の中で使わない壁、橙の点線 = 通路のためにあけた口）', '#5a4a3a', true, (g) => {
   if (!levelOK(-1)) return;
-  for (const s of D.polygons.plateauWalls) L.polyline([LL(s[0], s[1]), LL(s[2], s[3])], { color: s[6] === 'jr' ? '#b9a' : '#5a4a3a', weight: s[6] === 'jr' ? 1 : 1.2, opacity: s[6] === 'jr' ? 0.5 : 0.8, dashArray: s[6] === 'jr' ? '2 3' : null, interactive: false }).addTo(g);
+  for (const s of D.polygons.plateauWalls) { if (s[6] === 'open') continue; L.polyline([LL(s[0], s[1]), LL(s[2], s[3])], { color: s[6] === 'jr' ? '#b9a' : '#5a4a3a', weight: s[6] === 'jr' ? 1 : 1.2, opacity: s[6] === 'jr' ? 0.5 : 0.8, dashArray: s[6] === 'jr' ? '2 3' : null, interactive: false }).addTo(g); }
+  for (const s of D.polygons.madeDoors || []) { const pl = L.polyline([LL(s[0], s[1]), LL(s[2], s[3])], { color: '#ff7f0e', weight: 5, opacity: 0.9, dashArray: '3 3' }); pl.on('click', (e) => { show(`通路が通り抜ける壁にあけた口（幅 1.6 m）\n線: ${s[6]}`); L.DomEvent.stop(e); }); pl.addTo(g); }
 });
 defGroup('plClosure', 'PLATEAU 閉じる面（モデルの境目・壁なし）', '#9b59b6', true, (g) => {
   if (!levelOK(-1)) return;
@@ -215,7 +216,7 @@ function renderIssues() {
   }
 }
 
-const DATA = ['data/merged.json?v=mvubj6vd'];
+const DATA = ['data/merged.json?v=mvubu2fx'];
 const load = (i) => fetch(DATA[i]).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch((e) => (i + 1 < DATA.length ? load(i + 1) : Promise.reject(e)));
 load(0).then((d) => {
   D = d;
