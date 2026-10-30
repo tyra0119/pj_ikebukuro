@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvv0acyr';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvv0acyr';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvv0acyr';
-import { addTrains } from './trains.js?v=mvv0acyr';
-import { routeSteps, stepLine } from './steps.js?v=mvv0acyr';
-import { initMeet } from './meet.js?v=mvv0acyr';
+import { initPhoto } from './photo.js?v=mvv0mb18';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvv0mb18';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvv0mb18';
+import { addTrains } from './trains.js?v=mvv0mb18';
+import { routeSteps, stepLine } from './steps.js?v=mvv0mb18';
+import { initMeet } from './meet.js?v=mvv0mb18';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvv0acyr'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvv0mb18'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -368,7 +368,7 @@ function edgeGap(u, v) {
 }
 // 損を付けるのは、行き先の点がみな改札の中か、みな外のときだけ（改札そのものが行き先のときは中からでも外からでも着けるので付けない。
 // 付けると東京の八重洲側の改札へ、外の経路網が床の切れ目を通る道を選んで歩けなくなった）
-function graphChain(px, py, pl, targets) {
+function graphChain(px, py, pl, targets, seeds = null) { // seeds: 歩きはじめの点と、そこまでの道のり（地上にいるとき。findRoute）
   const n = GN.length, dist = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1), pmode = new Int8Array(n), done = new Uint8Array(n);
   const side = fareSide(px, py, pl), tsides = new Set([...targets].map(nodeSide)), cost = tsides.size === 1 ? GATE_COST : 0;
   // 歩きはじめの点: 近い 12 点のうち、まっすぐ行くと壁を横切る点には大きな損（池袋の西口(中央) の 1F は点が少なく、壁の向こう 72 m 先の
@@ -376,7 +376,8 @@ function graphChain(px, py, pl, targets) {
   const wallBetween = (g) => g[2] === pl && data.walls.some((w) => w[4] === pl && crosses([px, py], [g[0], g[1]], [w[0], w[1]], [w[2], w[3]]));
   GN.map((g, i) => [i, Math.hypot(g[0] - px, g[1] - py) + (g[2] === pl ? 0 : 80)]).sort((a, b) => a[1] - b[1]).slice(0, 12)
     .map(([i, c]) => [i, c + (nodeSide(i) !== side ? cost : 0) + (wallBetween(GN[i]) ? 1000 : 0)]).sort((a, b) => a[1] - b[1]).slice(0, 6)
-    .forEach(([i, c]) => { dist[i] = c; });
+    .forEach(([i, c]) => { if (!seeds) dist[i] = c; });
+  if (seeds) for (const [i, c] of seeds) dist[i] = Math.min(dist[i], c);
   for (;;) {
     let u = -1, best = Infinity;
     for (let i = 0; i < n; i++) if (!done[i] && dist[i] < best) { best = dist[i]; u = i; }
@@ -394,23 +395,36 @@ function graphChain(px, py, pl, targets) {
   }
 }
 
+let groundTreeFn = null; // 地上にいるときの道の木（meet.js の groundTree。待ち合わせ案内を読み込んだあとに入る）
 // 道筋: 階をまたぐ所は経路網、地下 1 階の経路網の外（地下街）はマス目（gridPath）でつなぐ
 function findRoute(px, py, pl, d) {
   const B1 = GL, P = (x, y, l, mode = 1) => ({ x, y, l, mode }); // B1: マス目の階（地下街の無い駅は null）
   const gridLeg = (ax, ay, bx, by) => gridPath(ax, ay, bx, by)?.map(([x, y]) => P(x, y, B1));
-  const fromChain = (chain) => [P(px, py, pl), ...chain.map(({ v, mode }) => P(GN[v][0], GN[v][1], GN[v][2], mode))];
+  // 地上（1F）で、経路網の 1F の点が 15 m 以内に無いとき（地上の歩道にいる）は、待ち合わせの経路網の地上の歩道を
+  // たどって行ける経路網の 1F の点（JR の 1F）から歩きはじめる（まっすぐ建物を横切らないように）。seeds: [経路網の点, そこまでの道のり, 待ち合わせの経路網の点]
+  let gt = null, seeds = null;
+  if (groundTreeFn && pl === 1 && !GN.some((g) => g[2] === 1 && Math.hypot(g[0] - px, g[1] - py) < 15) && (gt = groundTreeFn(px, py))) {
+    seeds = [];
+    GN.forEach((g, i) => { if (g[2] !== 1) return; const r = gt.reach(g[0], g[1], 0); if (r) seeds.push([i, r.cost, r.node]); });
+    if (!seeds.length) seeds = null;
+  }
+  const fromChain = (chain) => {
+    const s = seeds && chain.length && seeds.find(([i]) => i === chain[0].v);
+    const leg = s ? gt.path(s[2]).map(([x, y, l]) => P(x, y, l)) : [];
+    return [P(px, py, pl), ...leg, ...chain.map(({ v, mode }) => P(GN[v][0], GN[v][1], GN[v][2], mode))];
+  };
   if (!d.nodes) { // 地下街の行き先（経路網の外）
     if (pl === B1) return gridLeg(px, py, d.x, d.y) || [P(px, py, pl), P(d.x, d.y, B1)];
     // ほかの階からは、経路網で行き先に近い地下 1 階の点まで行き、そこからマス目
     // 地下街の行き先は改札の外なので、改札の外の点を目指す（地図で選んだ場所は、その場所と同じ側）
     const want = d.t === 'pin' ? fareSide(d.x, d.y, B1) : 'out';
     const near = GN.map((g, i) => [i, g]).filter(([i, g]) => g[2] === B1 && nodeSide(i) === want).sort((a, b) => Math.hypot(a[1][0] - d.x, a[1][1] - d.y) - Math.hypot(b[1][0] - d.x, b[1][1] - d.y)).slice(0, 3).map(([i]) => i);
-    const chain = graphChain(px, py, pl, new Set(near));
+    const chain = graphChain(px, py, pl, new Set(near), seeds);
     if (!chain) return null;
     const pts = fromChain(chain), last = pts[pts.length - 1], leg = gridLeg(last.x, last.y, d.x, d.y);
     return leg ? [...pts, ...leg.slice(1)] : [...pts, P(d.x, d.y, B1)];
   }
-  const chain = graphChain(px, py, pl, new Set(d.nodes));
+  const chain = graphChain(px, py, pl, new Set(d.nodes), seeds);
   if (!chain) return null;
   let pts = fromChain(chain);
   // 地下 1 階で最初の点まで遠い（地下街にいる）ときは、最初の区間をマス目で
@@ -1156,6 +1170,23 @@ function openYaw(x, y, z) {
   }
   return best[0];
 }
+// 現在地（GPS）: 端末の位置から、地上（1F）のいちばん近い床（60 m 以内）を出発にする。GPS では階が分からないので、地下にいても地上として扱う
+// （利用者 2026-10-30「現在地は設定できないんだっけ？」「『出発・行き先』の出発にも、GPS の現在地を足して」。待ち合わせの「現在地」（meet.js）と同じ考え）
+const GEO = (() => { const o = data.origin, D = Math.PI / 180, a = 6378137, e2 = 6.69437999014e-3, w = Math.sqrt(1 - e2 * Math.sin(o.lat * D) ** 2); return { kx: D * (a / w) * Math.cos(o.lat * D), ky: D * ((a * (1 - e2)) / w ** 3) }; })();
+function gpsStart(done) {
+  if (!navigator.geolocation) { toast('この端末では位置が取れません'); return; }
+  toast('現在地を調べています…');
+  navigator.geolocation.getCurrentPosition((p) => {
+    const x = (p.coords.longitude - data.origin.lon) * GEO.kx, y = (p.coords.latitude - data.origin.lat) * GEO.ky, gz = LV['1'].z;
+    if (Math.abs(x) > 450 || Math.abs(y) > 450) { toast(`駅から約${Math.round(Math.hypot(x, y))} m 離れています。駅のまわり 450 m の中で使ってください`); return; }
+    const on = (qx, qy) => { const z = phys.groundAt(qx, qy, gz + 0.5); return z != null && Math.abs(z - gz) < 0.3; };
+    let best = on(x, y) ? [x, y] : null;
+    for (let r = 1; r <= 60 && !best; r++) for (let k = 0; k < 24 && !best; k++) { const a = (k / 24) * Math.PI * 2, qx = x + Math.sin(a) * r, qy = y + Math.cos(a) * r; if (on(qx, qy)) best = [qx, qy]; }
+    if (!best) { toast('現在地のそばに歩ける所が見つかりませんでした'); return; }
+    $('toast').hidden = true;
+    done({ t: 'gps', name: '現在地', x: best[0], y: best[1], level: 1 });
+  }, () => toast('位置が取れませんでした（位置情報の許可を確かめてください）'), { enableHighAccuracy: true, timeout: 10000 });
+}
 // 「出発・行き先」の画面: 上の 2 行（出発・行き先）のうち選んでいる行の一覧を出す。選んだものはこの画面の中だけで覚え、
 // 「案内を始める」（行き先が無ければ「ここへ移動」）で出発地へ移動し、行き先の案内を始める
 const pend = { from: null, to: null }; // from: null はいまいる所
@@ -1208,6 +1239,13 @@ function openDest(mode = destMode) {
     b.innerHTML = '<span class="dot" style="background:#1a73e8">今</span>いまいる所<span class="tag">移動しない</span>';
     b.onclick = () => { pend.from = null; openDest('to'); };
     list.append(b);
+    if (LV['1']) { // 現在地（GPS）
+      const g = document.createElement('button');
+      g.className = 'item' + (pend.from && pend.from.t === 'gps' ? ' sel' : ''); g.type = 'button';
+      g.innerHTML = '<span class="dot" style="background:#1a73e8">◎</span>現在地<span class="tag">端末の位置・地上</span>';
+      g.onclick = () => gpsStart((d) => { pend.from = d; openDest('to'); });
+      list.append(g);
+    }
   }
   const dist = (d) => Math.hypot(d.x - me.x, d.y - me.y) + Math.abs(d.level - pl) * 30;
   const gates = data.dest.filter((d) => d.t === 'gate');
@@ -1333,7 +1371,7 @@ $('goBtn').onclick = () => {
 $('gShare').onclick = async () => {
   if (!nav.dest) return;
   const q = new URLSearchParams({ st: ST.key });
-  if (startName) q.set('from', startName);
+  if (startName && startName !== '現在地') q.set('from', startName); // 現在地（GPS）は送った先では意味が無い
   q.set('to', nav.dest.name);
   const url = `${location.origin}${location.pathname}?${q}`;
   if (navigator.share) { try { await navigator.share({ title: 'エキさんぽの案内', text: `${startName ? startName + ' から ' : ''}${nav.dest.name} への案内`, url }); return; } catch { /* 取り消し */ } }
@@ -1976,6 +2014,7 @@ if (!replaying) {
 // ---------- 待ち合わせ案内（統合データ。図と手順 + 立体） ----------
 const meetShared = { p: null }; // あいての位置（小さな地図が描く）
 const meet = await initMeet({ $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared: meetShared, setMeetRoute: (r) => { nav.fixed = r; setDest(r); }, clearRoute: () => setDest(null) });
+groundTreeFn = meet.groundTree;
 // 空と霧: 地下は近くで霧が濃い（30〜170 m）。地上（1F より上）では遠くまで見えるように霧を 60〜600 m にし、空を明るくする
 // （利用者 2026-10-30「地上を歩いてると遠くが見えないので、恐い印象を与える」）。地上の範囲（±450 m）の外には平らな地面を敷く（空の色の穴が見えないように）
 const SKY = { in: new THREE.Color('#c3c8cc'), out: new THREE.Color('#d3dfe9'), near: [30, 60], far: [170, 600] };

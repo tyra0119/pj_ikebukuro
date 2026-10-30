@@ -2,8 +2,8 @@
 // 同じ経路を「図と手順」（この画面のパネル）と「立体」（床の矢印・案内カード）の両方で見せる。手順を押すとその場所へ立体で飛ぶ。
 // 地上の歩道にも床があるので、出発から立体で歩ける。立体に床の無い点（地下 2 階・データの範囲外）の区間だけ図と手順で案内する。
 
-import { Guide, lvName } from './guide.js?v=mvv0acyr';
-import { startRoom, roomId } from './room.js?v=mvv0acyr';
+import { Guide, lvName } from './guide.js?v=mvv0mb18';
+import { startRoom, roomId } from './room.js?v=mvv0mb18';
 
 export async function initMeet(A) {
   const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared, setMeetRoute, clearRoute } = A;
@@ -281,5 +281,42 @@ export async function initMeet(A) {
     $('meetPanel').hidden = false;
   }
   if (q.get('room') && q.get('role')) startShare(q.get('role'), q.get('room'));
-  return { run, render, get cur() { return cur; }, get partner() { return partner; }, get room() { return room; }, startShare, stopShare };
+  // 地上にいるときの道の木: いまいる所のそばの地上の点から、地上（階 0: 歩道・JR の 1F）の線をたどった道のり。歩く画面の「出発・行き先」で、地上から
+  // 駅の経路網（JR の 1F の点）までの道に使う（app.js の findRoute。歩く画面の経路網には地上の歩道が無く、まっすぐ建物を横切った。2026-10-30）。
+  // 出口の階段で地下へ下りる道は使わない（待ち合わせの経路網の階段の線は、歩く立体の出口の階段の向き・位置と違い、階段室の壁に当たった）。
+  // reach: (x, y) から r m 以内の階 lv の行ける点のうち、道のり + 残りがいちばん短いもの。path: そこまでの点（歩く画面の階）
+  let comp = null; // 地上の線でつながるかたまりの大きさ（点ごと）
+  function groundTree(ax, ay) {
+    if (!comp) {
+      comp = new Int32Array(D.nodes.length);
+      const ok = (i) => N(i)[2] === 0;
+      for (let i = 0; i < D.nodes.length; i++) {
+        if (comp[i] || !ok(i)) continue;
+        const q = [i], seen = new Set([i]);
+        for (let k = 0; k < q.length; k++) for (const [v, li] of G.adj[q[k]]) if (!seen.has(v) && ok(v) && D.links[li][3] !== 5) { seen.add(v); q.push(v); }
+        for (const v of q) comp[v] = q.length;
+      }
+    }
+    // いちばん近い地上の点（200 m 以内。GPS の現在地は線路や建物の中のこともある）。数点だけの離れたかたまりの点は使わない（駅の南で、まわりとつながらない点から歩きはじめた）
+    let s = -1, bs = 200;
+    D.nodes.forEach((m, i) => { if (m[2] !== 0 || comp[i] < 50) return; const d = Math.hypot(m[0] - ax, m[1] - ay); if (d < bs) { bs = d; s = i; } });
+    if (s < 0) return null;
+    const n = D.nodes.length, dist = new Float64Array(n).fill(Infinity), prev = new Int32Array(n).fill(-1), heap = [[0, s]];
+    dist[s] = 0;
+    while (heap.length) {
+      let m = 0; for (let k = 1; k < heap.length; k++) if (heap[k][0] < heap[m][0]) m = k;
+      const [d, u] = heap[m]; heap[m] = heap[heap.length - 1]; heap.pop();
+      if (d > dist[u]) continue;
+      for (const [v, li] of G.adj[u]) { const L = D.links[li]; if (N(v)[2] !== 0 || L[3] === 5) continue; const nd = d + L[2]; if (nd < dist[v]) { dist[v] = nd; prev[v] = u; heap.push([nd, v]); } }
+    }
+    return {
+      reach(x, y, lv, r = 10) {
+        let t = -1, bt = Infinity;
+        D.nodes.forEach((m, i) => { if (m[2] !== lv || dist[i] === Infinity) return; const q = Math.hypot(m[0] - x, m[1] - y); if (q <= r && dist[i] + q < bt) { bt = dist[i] + q; t = i; } });
+        return t < 0 ? null : { node: t, cost: bs + bt };
+      },
+      path(t) { const out = []; for (let v = t; v >= 0; v = prev[v]) out.unshift([N(v)[0], N(v)[1], WL(N(v)[2])]); return out; },
+    };
+  }
+  return { run, render, groundTree, get cur() { return cur; }, get partner() { return partner; }, get room() { return room; }, startShare, stopShare };
 }
