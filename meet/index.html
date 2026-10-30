@@ -25,7 +25,7 @@
   ol.steps li { display: grid; grid-template-columns: 34px 1fr; gap: 8px; padding: 8px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
   ol.steps li.sel { background: #fff7d6; }
   ol.steps .ic { width: 30px; height: 30px; border-radius: 15px; background: #ddd; color: #222; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
-  ol.steps .ic.walk { background: #cfe3ff; } ol.steps .ic.turnL, ol.steps .ic.turnR, ol.steps .ic.uturn { background: #ffe1b3; } ol.steps .ic.stair, ol.steps .ic.esc, ol.steps .ic.ev { background: #d6f5d6; } ol.steps .ic.gate { background: #f9d0d0; } ol.steps .ic.start, ol.steps .ic.goal { background: #333; color: #fff; }
+  ol.steps .ic.walk, ol.steps .ic.cross { background: #cfe3ff; } ol.steps .ic.turnL, ol.steps .ic.turnR, ol.steps .ic.uturn { background: #ffe1b3; } ol.steps .ic.stair, ol.steps .ic.esc, ol.steps .ic.ev { background: #d6f5d6; } ol.steps .ic.gate { background: #f9d0d0; } ol.steps .ic.start, ol.steps .ic.goal { background: #333; color: #fff; }
   ol.steps .t { font-weight: 600; }
   ol.steps .d { color: var(--mut); font-size: 12.5px; margin-top: 2px; line-height: 1.5; }
   .exits button { margin: 2px 4px 2px 0; }
@@ -61,15 +61,15 @@
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module">
-import { Guide, lvName } from './guide.js?v=mvudom8o';
-const DATA = ['../data/meet.json?v=mvudom8o', '../data/meet.json?v=mvudom8o'];
+import { Guide, lvName } from './guide.js?v=mvudsybk';
+const DATA = ['../data/meet.json?v=mvudsybk', '../data/meet.json?v=mvudsybk'];
 const ORIGIN = { lat: 35.7295, lon: 139.7109 };
 const a = 6378137, e2 = 0.00669438002290, phi = ORIGIN.lat * Math.PI / 180, w = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
 const KX = (Math.PI / 180) * (a / w) * Math.cos(phi), KY = (Math.PI / 180) * ((a * (1 - e2)) / w ** 3);
 const LL = (x, y) => [ORIGIN.lat + y / KY, ORIGIN.lon + x / KX];
 const XY = (lat, lon) => [(lon - ORIGIN.lon) * KX, (lat - ORIGIN.lat) * KY];
 const $ = (id) => document.getElementById(id);
-const ICON = { start: '出', goal: '着', walk: '→', turnL: '↰', turnR: '↱', uturn: '↩', stair: '階', esc: 'エ', ev: 'EV', gate: '改' };
+const ICON = { start: '出', goal: '着', walk: '→', cross: '渡', turnL: '↰', turnR: '↱', uturn: '↩', stair: '階', esc: 'エ', ev: 'EV', gate: '改' };
 const LCOL = { 1: '#8e44ad', 0: '#2ca02c', '-0.5': '#17becf', '-1': '#1f77b4', '-2': '#d62728', '-3': '#e377c2', '-4': '#7f7f7f' };
 
 let D, G, curLevel = -1, route = null, fromList = [], toList = [];

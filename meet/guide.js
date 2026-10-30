@@ -88,6 +88,28 @@ export class Guide {
       });
       out.push(cur);
     }
+    const cut = [];
+    for (const s of out) {
+      const len = s.edges.reduce((t, e) => t + e.len, 0), ground = N(s.edges[0].a)[2] === 0 && N(s.edges[s.edges.length - 1].b)[2] === 0;
+      if (s.kind !== 'walk' || !ground || len <= 250) { cut.push(s); continue; }
+      let cur = { kind: 'walk', edges: [], turn: s.turn }, acc = 0, rest = len, usedHere = new Set();
+      s.edges.forEach((e, k) => {
+        cur.edges.push(e); acc += e.len; rest -= e.len;
+        if (rest < 60) return;
+        const next = s.edges[k + 1];
+        // 横断歩道を渡り終えた所（続いている横断歩道の最後の線）
+        if (acc >= 150 && e.cross && !(next && next.cross)) { cut.push(cur); cur = { kind: 'walk', edges: [], via: { kind: 'cross' } }; acc = 0; return; }
+        // 建物の目印（この点から 20 m 以内）
+        if (acc >= 200) {
+          const n = N(e.b); let best = null, bd = 20;
+          for (const m of this.D.marks) { if (m[4] !== 'b' || usedHere.has(m[3])) continue; const d = Math.hypot(m[0] - n[0], m[1] - n[1]); if (d < bd) { bd = d; best = m; } }
+          if (best) { usedHere.add(best[3]); cut.push(cur); cur = { kind: 'walk', edges: [], via: { kind: 'mark', name: best[3] } }; acc = 0; return; }
+          if (rest >= 100 && this.adj[e.b].length >= 3) { cut.push(cur); cur = { kind: 'walk', edges: [], via: { kind: 'corner' } }; acc = 0; }
+        }
+      });
+      cut.push(cur);
+    }
+    out.length = 0; out.push(...cut);
     for (const s of out) { s.from = s.edges[0].a; s.to = s.edges[s.edges.length - 1].b; s.l0 = N(s.from)[2]; s.l1 = N(s.to)[2]; s.len = s.edges.reduce((t, e) => t + e.len, 0); }
     // 数 m の歩きは単独の手順にしない（次の手順に含める）
     const res = [];
@@ -146,6 +168,8 @@ export class Guide {
         const prevIcon = steps.length ? steps[steps.length - 1].icon : '';
         const same = (s.turn === 'right' && prevIcon === 'turnR') || (s.turn === 'left' && prevIcon === 'turnL');
         let lead = !s.turn ? '' : s.turn === 'right' ? (same ? 'さらに右に曲がって、' : '右に曲がって、') : s.turn === 'left' ? (same ? 'さらに左に曲がって、' : '左に曲がって、') : prevIcon === 'uturn' ? 'さらに折り返して、' : '折り返して、';
+        if (s.via) lead = s.via.kind === 'cross' ? '横断歩道を渡って、' : s.via.kind === 'corner' ? '角を過ぎてそのまま、' : `「${s.via.name}」のそばを過ぎて、`;
+        if (s.via && s.via.kind === 'mark') used[s.via.name] = 1;
         if (s.turn === 'back') {
           // 折り返す地点（この手順の始まりの点）の目印。無ければ、前の手順の終わりの約 15 m の進む方角
           const tm = this.markNear(s.from, 12, 'gmrso', used) || (ground ? this.markNear(s.from, 40, 'b', used) : null);
@@ -167,7 +191,7 @@ export class Guide {
         const est = this.estPart(s); if (est && est.len >= 8) d += `${est.where === 0 ? 'はじめの' : est.where === 2 ? '終わりの' : '途中の'}約${Math.max(5, Math.round(est.len / 5) * 5)}mは、地図データに通路の線が無いので、近くの通路をまっすぐ結んで案内しています。実際の通り道は少し違うかもしれません。`;
         if (ground && s.len >= 120) { const bs = this.marksAlong(s, 20, 'b', used).slice(0, 2); if (bs.length) { for (const b of bs) used[b[3]] = 1; d += `途中で${bs.map((b) => b[3]).join('・')}のそばを通ります。`; } }
         const mk = !ground && this.markNear(s.to, 15, 'gmrso', used); if (mk) { used[mk[3]] = 1; d += `「${mk[3]}」のそばまで進みます。`; }
-        steps.push({ icon: !s.turn ? 'walk' : s.turn === 'right' ? 'turnR' : s.turn === 'left' ? 'turnL' : 'uturn', title: `${lead}${where}約${m}m 進む`, detail: d, seg: s });
+        steps.push({ icon: s.via ? (s.via.kind === 'cross' ? 'cross' : 'walk') : !s.turn ? 'walk' : s.turn === 'right' ? 'turnR' : s.turn === 'left' ? 'turnL' : 'uturn', title: `${lead}${where}約${m}m 進む`, detail: d, seg: s });
       } else if (s.kind === 'gate') {
         const enter = !inFare; inFare = !inFare;
         const g = this.markNear(s.to, 20, 'g', {}) || this.markNear(s.from, 20, 'g', {});
