@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvuudu1t';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuudu1t';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuudu1t';
-import { addTrains } from './trains.js?v=mvuudu1t';
-import { routeSteps, stepLine } from './steps.js?v=mvuudu1t';
-import { initMeet } from './meet.js?v=mvuudu1t';
+import { initPhoto } from './photo.js?v=mvuurtam';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuurtam';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuurtam';
+import { addTrains } from './trains.js?v=mvuurtam';
+import { routeSteps, stepLine } from './steps.js?v=mvuurtam';
+import { initMeet } from './meet.js?v=mvuurtam';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvuudu1t'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvuurtam'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -55,7 +55,7 @@ scene.add(new THREE.HemisphereLight('#ffffff', '#b3ada2', 1.0));
 const sun = new THREE.DirectionalLight('#ffffff', 1.0);
 sun.position.set(40, 60, 25);
 scene.add(sun);
-const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 600);
+const camera = new THREE.PerspectiveCamera(70, 1, 0.05, 1500); // 地上では 600 m 先まで見える（霧の終わり）
 camera.rotation.order = 'YXZ';
 const V3 = (x, y, z) => new THREE.Vector3(x, z, -y);
 
@@ -1958,14 +1958,36 @@ if (!replaying) {
 // ---------- 待ち合わせ案内（統合データ。図と手順 + 立体） ----------
 const meetShared = { p: null }; // あいての位置（小さな地図が描く）
 const meet = await initMeet({ $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared: meetShared, setMeetRoute: (r) => { nav.fixed = r; setDest(r); }, clearRoute: () => setDest(null) });
+// 空と霧: 地下は近くで霧が濃い（30〜170 m）。地上（1F より上）では遠くまで見えるように霧を 60〜600 m にし、空を明るくする
+// （利用者 2026-10-30「地上を歩いてると遠くが見えないので、恐い印象を与える」）。地上の範囲（±450 m）の外には平らな地面を敷く（空の色の穴が見えないように）
+const SKY = { in: new THREE.Color('#c3c8cc'), out: new THREE.Color('#d3dfe9'), near: [30, 60], far: [170, 600] };
+let skyK = 0, photoAt = 0;
+function updateSky(dt) {
+  const want = LV['1'] && me.z > LV['1'].z - 1.5 ? 1 : 0;
+  if (Math.abs(want - skyK) < 0.001) return;
+  skyK += (want - skyK) * Math.min(1, dt * 3);
+  if (Math.abs(want - skyK) < 0.002) skyK = want;
+  scene.background.copy(SKY.in).lerp(SKY.out, skyK); scene.fog.color.copy(scene.background);
+  scene.fog.near = SKY.near[0] + (SKY.near[1] - SKY.near[0]) * skyK; scene.fog.far = SKY.far[0] + (SKY.far[1] - SKY.far[0]) * skyK;
+}
 // 写真の街並み（photo.js。Ekishirube を参考に）: 地上のある駅だけボタンを出す。選んだかどうかは端末に覚える
 if (data.mall && data.mall.layout && data.mall.layout.gfloor) {
+  { // 地上の範囲の外の地面
+    const sh = new THREE.Shape([[-3000, -3000], [3000, -3000], [3000, 3000], [-3000, 3000]].map(([x, y]) => new THREE.Vector2(x, y)));
+    sh.holes.push(new THREE.Path([[-449, -449], [-449, 449], [449, 449], [449, -449]].map(([x, y]) => new THREE.Vector2(x, y))));
+    const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshLambertMaterial({ color: '#b4b2ac' }));
+    m.rotation.x = -Math.PI / 2; m.position.y = LV['1'].z - 0.15; m.name = 'outerGround'; scene.add(m);
+  }
   const baseCredit = '出典: ' + data.credits.join(' ／ ');
-  const photo = initPhoto({ scene, data, groundZ: LV['1'].z, stationKey: ST.key, setStatus: (t) => { if (t) toast(t); }, onCredit: (c) => { $('credit').textContent = c ? baseCredit + ' ／ ' + c : baseCredit; } });
+  const photo = initPhoto({ scene, data, groundZ: LV['1'].z, stationKey: ST.key, light: touchUI, here: () => [me.x, me.y], setStatus: (t) => { if (t) toast(t); }, onCredit: (c) => { $('credit').textContent = c ? baseCredit + ' ／ ' + c : baseCredit; } });
   const btn = $('photoBtn'); btn.hidden = false;
   const show = (on) => { btn.classList.toggle('primary', on); btn.textContent = on ? '写真の街並み ✓' : '写真の街並み'; };
-  btn.onclick = async () => { const on = await photo.set(!photo.on); show(on); try { localStorage.setItem('ekisanpo.photo', on ? '1' : '0'); } catch (err) { void err; } };
-  try { if (localStorage.getItem('ekisanpo.photo') === '1') photo.set(true).then(show); } catch (err) { void err; }
+  // 読み込みの途中で画面が落ちた（スマホで重すぎた）ときは、次に開いたとき自動では読まない（読み込み中の印が残っていたら、ふつうの見た目で開く）
+  const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (err) { void err; } return null; };
+  const turn = async (on) => { if (on) ls('ekisanpo.photoBusy', '1'); const r = await photo.set(on); ls('ekisanpo.photoBusy', null); show(r); return r; };
+  btn.onclick = async () => { const on = await turn(!photo.on); ls('ekisanpo.photo', on ? '1' : '0'); };
+  if (ls('ekisanpo.photoBusy') === '1') { ls('ekisanpo.photoBusy', null); ls('ekisanpo.photo', '0'); toast('前に写真の街並みの読み込みが終わらなかったので、ふつうの見た目で開きました'); }
+  else if (ls('ekisanpo.photo') === '1') turn(true);
   window.ekisanpoPhoto = photo; photoCity = photo;
 }
 
@@ -2127,6 +2149,8 @@ function frame(now) {
   updateReplayGuide();
   updateBeacon(now);
   updateElev();
+  updateSky(dt);
+  if (photoCity && now - photoAt > 3000) { photoAt = now; photoCity.update(); } // スマホの写真の街並み: 近くのタイルを読み足す
   drawMini();
   drawCompass();
   renderer.render(scene, camera);

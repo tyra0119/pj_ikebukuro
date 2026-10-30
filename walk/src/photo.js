@@ -7,7 +7,9 @@ import * as THREE from 'three';
 const JSM = 'https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/';
 const CREDIT = '航空写真: 国土地理院（シームレス空中写真）／ 建物: 3D 都市モデル（Project PLATEAU）国土交通省 建築物モデル LOD2';
 
-export function initPhoto({ scene, data, groundZ, stationKey, setStatus, onCredit }) {
+// light: スマホ。建物は近く（here() から NEAR m）のタイルだけ、空中写真はズーム 17 にする（全部で約 85 MB あり、スマホでは重すぎて読み込みが終わらないことがある。2026-10-30 利用者「読み込み中から進まない」）
+export function initPhoto({ scene, data, groundZ, stationKey, setStatus, onCredit, light = false, here = () => [0, 0] }) {
+  const NEAR = 150; // スマホで建物を読む範囲（m）。タイルは 1 枚 約 220 × 130 m で、150 m なら 8 枚前後・約 17 MB（全部は 46 枚・約 85 MB）
   const st = { on: false, loading: null, ground: null, city: null, tex: null };
   const origin = data.origin; // { lat, lon }
   const D = Math.PI / 180, a = 6378137, e2 = 6.69437999014e-3;
@@ -22,7 +24,7 @@ export function initPhoto({ scene, data, groundZ, stationKey, setStatus, onCredi
     const ty = (lat, z) => { const r = lat * D; return ((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * 2 ** z; };
     const lonOf = (x, z) => (x / 2 ** z) * 360 - 180;
     const latOf = (y, z) => { const n = Math.PI * (1 - (2 * y) / 2 ** z); return Math.atan(Math.sinh(n)) / D; };
-    let z = 18, x0, x1, y0, y1;
+    let z = light ? 17 : 18, x0, x1, y0, y1;
     for (; z >= 16; z--) { x0 = Math.floor(tx(lon0, z)); x1 = Math.floor(tx(lon1, z)); y0 = Math.floor(ty(lat1, z)); y1 = Math.floor(ty(lat0, z)); if (Math.max(x1 - x0, y1 - y0) < 12) break; }
     const c = document.createElement('canvas'); c.width = (x1 - x0 + 1) * 256; c.height = (y1 - y0 + 1) * 256;
     const cx = c.getContext('2d'), tex = new THREE.CanvasTexture(c), jobs = [];
@@ -87,53 +89,76 @@ export function initPhoto({ scene, data, groundZ, stationKey, setStatus, onCredi
   async function load() {
     const list = await fetch(`data/${stationKey}-tiles.json`).then((r) => (r.ok ? r.json() : null)).catch(() => null);
     if (!list || !list.tiles.length) throw new Error('この駅には写真の街並みのデータがありません');
+    st.list = list; st.loaded = new Map(); st.yOff = null;
     st.ground = groundPhoto(list.box);
     st.ground.ready.then(() => { if (st.on) applyGround(st.ground); });
     await ensureLoader();
+    const grp = new THREE.Group(); grp.name = 'photoCity'; grp.matrixAutoUpdate = true;
+    st.city = grp;
+    await addTiles(light ? wanted(NEAR) : list.tiles.map((_, i) => i), true);
+    setStatus('');
+  }
+  // here() から r m 以内にかかるタイルの番号（範囲の無いタイルは常に）
+  function wanted(r) {
+    const [hx, hy] = here();
+    return st.list.tiles.map((t, i) => (t.length < 6 || Math.max(t[2] - hx, 0, hx - t[4]) ** 2 + Math.max(t[3] - hy, 0, hy - t[5]) ** 2 <= r * r ? i : -1)).filter((i) => i >= 0);
+  }
+  // スマホ: 歩いて動いたら、近くのタイルを読み足し、遠くなったタイルは捨てる（app.js が数秒ごとに呼ぶ）
+  async function update() {
+    if (!light || !st.on || !st.city || st.busy) return;
+    const near = new Set(wanted(NEAR)), keep = new Set(wanted(NEAR + 150));
+    for (const [i, h] of st.loaded) if (!keep.has(i)) { st.city.remove(h); h.traverse((o) => { if (!o.isMesh) return; o.geometry.dispose(); if (o.material.map) o.material.map.dispose(); o.material.dispose(); }); st.loaded.delete(i); }
+    const add = [...near].filter((i) => !st.loaded.has(i));
+    if (add.length) await addTiles(add, false);
+  }
+  async function addTiles(idx, status) {
+    st.busy = true;
+    const list = st.list, grp = st.city;
     let done = 0;
-    setStatus(`写真の街並みを読み込み中（0/${list.tiles.length}）`);
-    const tiles = await Promise.all(list.tiles.map(([b, rel]) => loadTile(list.bases[b] + rel).then((r) => { done++; setStatus(`写真の街並みを読み込み中（${done}/${list.tiles.length}）`); return r; }, () => { done++; return null; })));
-    const grp = new THREE.Group(), mins = [];
-    for (const r of tiles) {
-      if (!r) continue;
+    if (status) setStatus(`写真の街並みを読み込み中（0/${idx.length}）`);
+    const tiles = await Promise.all(idx.map((i) => loadTile(list.bases[list.tiles[i][0]] + list.tiles[i][1]).then((r) => { done++; if (status) setStatus(`写真の街並みを読み込み中（${done}/${idx.length}）`); return r; }, () => { done++; return null; })));
+    const holders = [];
+    tiles.forEach((r, k) => {
+      if (!r) return;
       const holder = new THREE.Group(); holder.matrixAutoUpdate = false; holder.matrix.copy(tileMatrix(r.center));
-      holder.add(r.scene); grp.add(holder);
-    }
+      holder.add(r.scene); grp.add(holder); st.loaded.set(idx[k], holder); holders.push(holder);
+    });
     grp.updateMatrixWorld(true);
-    // 地面の高さ: 建物ごとのいちばん低い点（楕円体高）の中央値を、この画面の地上の床の高さにそろえる
-    grp.traverse((o) => {
+    const mins = [];
+    for (const h of holders) h.traverse((o) => {
       if (!o.isMesh) return;
-      const p = o.geometry.attributes.position, id = o.geometry.attributes._batchid || o.geometry.attributes._feature_id_0, lo = {}, v = new THREE.Vector3();
-      for (let k = 0; k < p.count; k++) { v.fromBufferAttribute(p, k).applyMatrix4(o.matrixWorld); const b = id ? id.getX(k) : 0; if (!(b in lo) || v.y < lo[b]) lo[b] = v.y; }
-      for (const b of Object.keys(lo)) mins.push(lo[b]);
+      if (st.yOff == null) { // 地面の高さ: 建物ごとのいちばん低い点（楕円体高）の中央値を、この画面の地上の床の高さにそろえる（はじめに読んだタイルで決める）
+        const p = o.geometry.attributes.position, id = o.geometry.attributes._batchid || o.geometry.attributes._feature_id_0, lo = {}, v = new THREE.Vector3();
+        for (let k = 0; k < p.count; k++) { v.fromBufferAttribute(p, k).applyMatrix4(o.matrixWorld); const b = id ? id.getX(k) : 0; if (!(b in lo) || v.y < lo[b]) lo[b] = v.y; }
+        for (const b of Object.keys(lo)) mins.push(lo[b] - grp.position.y);
+      }
       const old = o.material;
       if (old.map) old.map.colorSpace = THREE.SRGBColorSpace;
       o.material = new THREE.MeshLambertMaterial({ map: old.map || null, color: old.map ? 0xffffff : 0xd9d2c8, side: THREE.DoubleSide });
+      old.dispose();
       o.name = 'photoBldg';
     });
-    mins.sort((p, q) => p - q);
-    grp.position.y = groundZ - (mins.length ? mins[Math.floor(mins.length / 2)] : 0);
+    if (st.yOff == null && mins.length) { mins.sort((p, q) => p - q); st.yOff = groundZ - mins[Math.floor(mins.length / 2)]; }
+    grp.position.y = st.yOff || 0;
     // JR の 1F・2F の構内（駅の建物の中）にかかる建物は外す: 建物（batch）ごとの足元の点のうち 2 割以上が JR の 1F・2F の面の中なら、その建物の三角形を落とす
     // （駅ビルの箱の中に JR の構内が入っていて、構内を歩くと駅ビルの壁の中に入った）
-    const jrUp = [...(data.floors || []), ...(data.blocks || [])].filter((f) => f.l >= 1).map((f) => { const r = f.r[0]; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (let i = 0; i < r.length; i += 2) { x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); y0 = Math.min(y0, r[i + 1]); y1 = Math.max(y1, r[i + 1]); } return { r: f.r, bb: [x0, y0, x1, y1] }; });
+    if (!st.jrUp) st.jrUp = [...(data.floors || []), ...(data.blocks || [])].filter((f) => f.l >= 1).map((f) => { const r = f.r[0]; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (let i = 0; i < r.length; i += 2) { x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); y0 = Math.min(y0, r[i + 1]); y1 = Math.max(y1, r[i + 1]); } return { r: f.r, bb: [x0, y0, x1, y1] }; });
     const pip = (ring, x, y) => { let c = false; for (let i = 0, j = ring.length - 2; i < ring.length; j = i, i += 2) { const xi = ring[i], yi = ring[i + 1], xj = ring[j], yj = ring[j + 1]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
-    const inJrUp = (x, y) => jrUp.some((f) => x >= f.bb[0] && x <= f.bb[2] && y >= f.bb[1] && y <= f.bb[3] && f.r.some((r) => pip(r, x, y)));
+    const inJrUp = (x, y) => st.jrUp.some((f) => x >= f.bb[0] && x <= f.bb[2] && y >= f.bb[1] && y <= f.bb[3] && f.r.some((r) => pip(r, x, y)));
     let dropped = 0;
     grp.updateMatrixWorld(true);
-    grp.traverse((o) => {
+    for (const h of holders) h.traverse((o) => {
       if (!o.isMesh) return;
       const g = o.geometry, p = g.attributes.position, id = g.attributes._batchid || g.attributes._feature_id_0; if (!id) return;
       const v = new THREE.Vector3(), cnt = {}, inn = {};
       for (let k = 0; k < p.count; k++) { const b = id.getX(k); v.fromBufferAttribute(p, k).applyMatrix4(o.matrixWorld); cnt[b] = (cnt[b] || 0) + 1; if (inJrUp(v.x, -v.z)) inn[b] = (inn[b] || 0) + 1; }
       const drop = new Set(Object.keys(cnt).filter((b) => (inn[b] || 0) >= cnt[b] * 0.2).map(Number)); if (!drop.size) return;
-      const idx = g.index ? Array.from(g.index.array) : Array.from({ length: p.count }, (_, i) => i), keep = [];
-      for (let t = 0; t < idx.length; t += 3) { if (drop.has(id.getX(idx[t]))) continue; keep.push(idx[t], idx[t + 1], idx[t + 2]); }
+      const ix = g.index ? Array.from(g.index.array) : Array.from({ length: p.count }, (_, i) => i), keep = [];
+      for (let t = 0; t < ix.length; t += 3) { if (drop.has(id.getX(ix[t]))) continue; keep.push(ix[t], ix[t + 1], ix[t + 2]); }
       g.setIndex(keep); dropped += drop.size;
     });
-    console.log('写真の街並み: JR の 1F・2F にかかる建物を外した', dropped);
-    grp.name = 'photoCity';
-    st.city = grp;
-    setStatus('');
+    if (dropped) console.log('写真の街並み: JR の 1F・2F にかかる建物を外した', dropped);
+    st.busy = false;
   }
 
   async function set(on) {
@@ -154,5 +179,5 @@ export function initPhoto({ scene, data, groundZ, stationKey, setStatus, onCredi
     }
     return st.on;
   }
-  return { set, get on() { return st.on; }, get ground() { return st.on && st.ground ? st.ground : null; } }; // ground: 小さな地図の 1F に敷く航空写真
+  return { set, update, get on() { return st.on; }, get ground() { return st.on && st.ground ? st.ground : null; } }; // ground: 小さな地図の 1F に敷く航空写真
 }
