@@ -2,17 +2,17 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuhcxtg';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuhcxtg';
-import { addTrains } from './trains.js?v=mvuhcxtg';
-import { routeSteps, stepLine } from './steps.js?v=mvuhcxtg';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvuhe8h1';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvuhe8h1';
+import { addTrains } from './trains.js?v=mvuhe8h1';
+import { routeSteps, stepLine } from './steps.js?v=mvuhe8h1';
 import { initMeet } from './meet.js';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvuhcxtg'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvuhe8h1'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -144,7 +144,9 @@ function awayFromWall(x, y, z) {
   const tx = best.ny, ty = -best.nx;
   for (const [d, e] of [[1, 0], [-1, 0], [1.5, 0], [-1.5, 0], [0.7, 1.2], [0.7, -1.2], [-0.7, 1.2], [-0.7, -1.2], [2, 0], [-2, 0]]) {
     const qx = best.px + best.nx * d + tx * e, qy = best.py + best.ny * d + ty * e;
-    if (phys.groundAt(qx, qy, z) != null && !phys.segsNear(qx, qy, z + 2.0, 0.5).length) return [qx, qy];
+    if (phys.groundAt(qx, qy, z) == null) continue;
+    const clear = phys.segsNear(qx, qy, z + 2.0, 1).every(([ax, ay, bx, by]) => { const dx = bx - ax, dy = by - ay, L = dx * dx + dy * dy, t = L ? Math.max(0, Math.min(1, ((qx - ax) * dx + (qy - ay) * dy) / L)) : 0; return Math.hypot(qx - ax - dx * t, qy - ay - dy * t) >= 0.5; }); // segsNear は格子のます単位で返すので距離は自分で見る
+    if (clear) return [qx, qy];
   }
   return [x, y];
 }
