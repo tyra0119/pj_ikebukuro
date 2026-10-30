@@ -2,17 +2,17 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左下の十字キー、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvue7qwp';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvue7qwp';
-import { addTrains } from './trains.js?v=mvue7qwp';
-import { routeSteps, stepLine } from './steps.js?v=mvue7qwp';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvueby7o';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvueby7o';
+import { addTrains } from './trains.js?v=mvueby7o';
+import { routeSteps, stepLine } from './steps.js?v=mvueby7o';
 import { initMeet } from './meet.js';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvue7qwp'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvueby7o'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -1040,6 +1040,7 @@ function updateGuide() {
     const next = nav.steps.steps.find((st) => st.kind !== 'start' && st.s > sCur - 1); // 区切りの 1 m 先までは「ここで」
     if (next) hint = stepLine(next, next.s - sCur);
   }
+  if (nav.fixed && nav.fixed.hintAt) { const h = nav.fixed.hintAt(pr); if (h) hint = h; } // 待ち合わせ案内: 統合データの手順の文で
   $('gHint').textContent = hint;
   if (!nav.arrived && Math.hypot(end.x - me.x, end.y - me.y) < 3 && end.l === pl) {
     nav.arrived = true;

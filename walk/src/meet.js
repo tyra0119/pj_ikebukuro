@@ -58,12 +58,31 @@ export async function initMeet(A) {
     const u = new URL(location.href); u.searchParams.set('mfrom', from.id); u.searchParams.set('mto', to.id); u.searchParams.set('pr', pr); history.replaceState(null, '', u);
     // 立体の案内: 床のある部分の道筋を固定の経路として渡す
     if (first >= 0) {
-      const walk = pts.slice(first).filter((p) => !p.ground);
-      const end = walk[walk.length - 1];
-      setMeetRoute({ name: to.name, x: end.x, y: end.y, level: end.l, pts: walk, all: pts, meet: true });
+      const walkPts = pts.slice(first).filter((p) => !p.ground);
+      const end = walkPts[walkPts.length - 1];
+      // 手順ごとの、立体の道筋の上の位置（道のりの長さ）。地上の手順は -Infinity（通り過ぎた扱い）
+      const ids = [r.E[0].a, ...r.E.map((e) => e.b)].slice(first);
+      const cum = [0]; for (let i = 1; i < walkPts.length; i++) cum.push(cum[i - 1] + Math.hypot(walkPts[i].x - walkPts[i - 1].x, walkPts[i].y - walkPts[i - 1].y));
+      const walkIdx = new Map(); ids.forEach((ni, k) => { if (!walkIdx.has(ni)) walkIdx.set(ni, k); });
+      const stepS = r.steps.map((st, k) => { if (st.seg && st.seg.kind === 'vert' && !canWalk(st.seg.from)) return -Infinity; const ni = stepNode(st, k); const wi = walkIdx.get(ni); return wi == null ? -Infinity : cum[Math.min(wi, cum.length - 1)]; }); // 地上から下りてくる上り下りは、立体に立った時点で済んでいる
+      stepS[stepS.length - 1] = cum[cum.length - 1];
+      cur.stepS = stepS; cur.cum = cum;
+      // 案内カードの文: 道筋の上のいまの位置（app.js の progress()）から、次の手順まで
+      const hintAt = (pr) => {
+        const sCur = cum[pr.i - 1] + (cum[pr.i] - cum[pr.i - 1]) * pr.t;
+        let next = -1; for (let k = 1; k < r.steps.length; k++) if (stepS[k] > sCur - 1) { next = k; break; }
+        let curK = 0; for (let k = 0; k < r.steps.length - 1; k++) if (stepS[k] <= sCur + 1) curK = k;
+        if (curK !== cur.k) { cur.k = curK; highlight(curK); }
+        if (next < 0) return null;
+        const st = r.steps[next], d = stepS[next] - sCur, title = st.icon === 'goal' ? `${to.name}に着く` : st.title;
+        return d < 3 ? `ここで、${title}` : d < 8 ? `まもなく、${title}` : `約${Math.round(d)} m 先、${title}`;
+      };
+      setMeetRoute({ name: to.name, x: end.x, y: end.y, level: end.l, pts: walkPts, all: pts, meet: true, hintAt });
     } else clearRoute();
     render();
   }
+  // いまの手順をパネルで強調（歩いて進むと自動でめくれる。開いていれば見える所へ）
+  function highlight(k) { const lis = $('meetSteps').children; for (let i = 0; i < lis.length; i++) lis[i].classList.toggle('here', i === k); if (!$('meetPanel').hidden && lis[k]) lis[k].scrollIntoView({ block: 'nearest' }); }
   // 手順の点（この手順が始まる統合データの点）
   const canWalk = (ni) => { const n = N(ni); const l = WL(n[2]); return l != null && n[6] !== 'mlit' && !(n[2] >= 0 && n[6] !== 'jr') && !!landingAt(n[0], n[1], l, true); };
   const stepNode = (s, k) => (s.seg ? (s.seg.kind === 'vert' && !canWalk(s.seg.from) && canWalk(s.seg.to) ? s.seg.to : s.seg.from) : k === 0 ? cur.r.from.node : cur.r.goal);
@@ -81,8 +100,8 @@ export async function initMeet(A) {
     const ol = $('meetSteps'); ol.innerHTML = '';
     // いまいる所に近い手順を強調（同じ階で、手順の始まりの点から 15 m 以内）
     const pl = levelOf(me.z);
-    let nearK = -1, nd = 15;
-    r.steps.forEach((s, k) => { const ni = stepNode(s, k), n = N(ni); if (WL(n[2]) !== pl) return; const d = Math.hypot(n[0] - me.x, n[1] - me.y); if (d < nd) { nd = d; nearK = k; } });
+    let nearK = cur.k ?? -1, nd = 15;
+    if (nearK < 0) r.steps.forEach((s, k) => { const ni = stepNode(s, k), n = N(ni); if (WL(n[2]) !== pl) return; const d = Math.hypot(n[0] - me.x, n[1] - me.y); if (d < nd) { nd = d; nearK = k; } });
     r.steps.forEach((s, k) => {
       const li = document.createElement('li'), b = document.createElement('button'); b.type = 'button';
       const ni = stepNode(s, k), walk = canWalk(ni);
