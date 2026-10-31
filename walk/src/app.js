@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvvwdiu7';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvwdiu7';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvwdiu7';
-import { addTrains } from './trains.js?v=mvvwdiu7';
-import { routeSteps, stepLine } from './steps.js?v=mvvwdiu7';
-import { initMeet } from './meet.js?v=mvvwdiu7';
+import { initPhoto } from './photo.js?v=mvvxgjt7';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvxgjt7';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvxgjt7';
+import { addTrains } from './trains.js?v=mvvxgjt7';
+import { routeSteps, stepLine } from './steps.js?v=mvvxgjt7';
+import { initMeet } from './meet.js?v=mvvxgjt7';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvvwdiu7'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvvxgjt7'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const PRE = window.ekisanpoPre || {}; // index.html で先に読みはじめたデータ（同じ駅のときだけ使う）
 const STATIONS = await (PRE.stations || Promise.reject()).catch(() => fetch(`data/stations.json${VER}`).then((r) => r.json()));
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
@@ -1209,7 +1209,8 @@ function gpsStart(done) {
   toast('現在地を調べています…');
   navigator.geolocation.getCurrentPosition((p) => {
     const x = (p.coords.longitude - data.origin.lon) * GEO.kx, y = (p.coords.latitude - data.origin.lat) * GEO.ky, gz = LV['1'].z;
-    if (Math.abs(x) > 450 || Math.abs(y) > 450) { toast(`駅から約${Math.round(Math.hypot(x, y))} m 離れています。駅のまわり 450 m の中で使ってください`); return; }
+    const gb = data.groundBox || [-450, -450, 450, 450];
+    if (x < gb[0] || x > gb[2] || y < gb[1] || y > gb[3]) { toast(`駅から約${Math.round(Math.hypot(x - (gb[0] + gb[2]) / 2, y - (gb[1] + gb[3]) / 2))} m 離れています。駅のまわり ${Math.round((gb[2] - gb[0]) / 2)} m の中で使ってください`); return; }
     const on = (qx, qy) => { const z = phys.groundAt(qx, qy, gz + 0.5); return z != null && Math.abs(z - gz) < 0.3; };
     let best = on(x, y) ? [x, y] : null;
     for (let r = 1; r <= 60 && !best; r++) for (let k = 0; k < 24 && !best; k++) { const a = (k / 24) * Math.PI * 2, qx = x + Math.sin(a) * r, qy = y + Math.cos(a) * r; if (on(qx, qy)) best = [qx, qy]; }
@@ -2147,7 +2148,8 @@ function updateSky(dt) {
 if (data.mall && data.mall.layout && data.mall.layout.gfloor) {
   { // 地上の範囲の外の地面
     const sh = new THREE.Shape([[-3000, -3000], [3000, -3000], [3000, 3000], [-3000, 3000]].map(([x, y]) => new THREE.Vector2(x, y)));
-    sh.holes.push(new THREE.Path([[-449, -449], [-449, 449], [449, 449], [449, -449]].map(([x, y]) => new THREE.Vector2(x, y))));
+    const [bx0, by0, bx1, by1] = (data.groundBox || [-450, -450, 450, 450]).map((v, i) => v + (i < 2 ? 1 : -1)); // 地上の範囲（駅ごと）
+    sh.holes.push(new THREE.Path([[bx0, by0], [bx0, by1], [bx1, by1], [bx1, by0]].map(([x, y]) => new THREE.Vector2(x, y))));
     const m = new THREE.Mesh(new THREE.ShapeGeometry(sh), new THREE.MeshLambertMaterial({ color: '#b4b2ac' }));
     m.rotation.x = -Math.PI / 2; m.position.y = LV['1'].z - 0.15; m.name = 'outerGround'; scene.add(m);
   }
