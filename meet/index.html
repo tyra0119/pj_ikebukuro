@@ -3,177 +3,20 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>池袋 待ち合わせ案内</title>
-<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
-<style>
-  :root { --acc: #2b6cb0; --bg: #fff; --fg: #222; --mut: #666; --line: #e5e5e5; }
-  html, body { margin: 0; height: 100%; font-family: system-ui, -apple-system, "Segoe UI", "Hiragino Sans", "Yu Gothic UI", sans-serif; font-size: 14px; color: var(--fg); background: var(--bg); }
-  #wrap { display: grid; grid-template-columns: 400px 1fr; height: 100%; }
-  #side { overflow: auto; padding: 12px 14px; border-right: 1px solid var(--line); box-sizing: border-box; }
-  #map { height: 100%; background: #f4f4f2; }
-  h1 { font-size: 17px; margin: 0 0 8px; }
-  h2 { font-size: 14px; margin: 14px 0 6px; }
-  label.f { display: block; margin: 6px 0 2px; color: var(--mut); font-size: 12px; }
-  select, input[type=text] { width: 100%; padding: 6px 8px; font-size: 14px; border: 1px solid #bbb; border-radius: 6px; box-sizing: border-box; background: #fff; }
-  .row { display: flex; gap: 6px; align-items: center; }
-  .row > * { flex: 1; }
-  button { padding: 7px 12px; border: 1px solid #bbb; background: #fafafa; border-radius: 6px; cursor: pointer; font-size: 14px; }
-  button.p { background: var(--acc); color: #fff; border-color: var(--acc); }
-  button.s { padding: 3px 8px; font-size: 12px; }
-  .sum { background: #eef4ff; border-radius: 8px; padding: 8px 10px; margin: 8px 0; line-height: 1.6; }
-  ol.steps { list-style: none; padding: 0; margin: 0; }
-  ol.steps li { display: grid; grid-template-columns: 34px 1fr; gap: 8px; padding: 8px 6px; border-bottom: 1px solid var(--line); cursor: pointer; }
-  ol.steps li.sel { background: #fff7d6; }
-  ol.steps .ic { width: 30px; height: 30px; border-radius: 15px; background: #ddd; color: #222; display: flex; align-items: center; justify-content: center; font-weight: 700; font-size: 13px; }
-  ol.steps .ic.walk, ol.steps .ic.cross { background: #cfe3ff; } ol.steps .ic.turnL, ol.steps .ic.turnR, ol.steps .ic.uturn { background: #ffe1b3; } ol.steps .ic.stair, ol.steps .ic.esc, ol.steps .ic.ev { background: #d6f5d6; } ol.steps .ic.gate { background: #f9d0d0; } ol.steps .ic.start, ol.steps .ic.goal { background: #333; color: #fff; }
-  ol.steps .t { font-weight: 600; }
-  ol.steps .d { color: var(--mut); font-size: 12.5px; margin-top: 2px; line-height: 1.5; }
-  .exits button { margin: 2px 4px 2px 0; }
-  .small { color: var(--mut); font-size: 12px; line-height: 1.5; }
-  .share { word-break: break-all; font-size: 12px; background: #f6f6f6; padding: 6px; border-radius: 6px; }
-  .lv { position: absolute; z-index: 1000; top: 10px; right: 10px; background: #fff; border-radius: 6px; box-shadow: 0 1px 4px rgba(0,0,0,.3); padding: 4px; }
-  .lv button { display: block; width: 100%; margin: 2px 0; padding: 4px 10px; }
-  .lv button.on { background: var(--acc); color: #fff; border-color: var(--acc); }
-  .leaflet-tooltip.stepno { background: #333; color: #fff; border: 0; font-weight: 700; padding: 1px 6px; }
-  @media (max-width: 760px) { #wrap { grid-template-columns: 1fr; grid-template-rows: 1fr 45vh; } #side { border-right: 0; border-bottom: 1px solid var(--line); } }
-</style>
-</head>
-<body>
-<div id="wrap">
-  <div id="side">
-    <h1>池袋 待ち合わせ案内</h1>
-    <div class="small">JR の駅構内・地下街（PLATEAU）・OpenStreetMap の地下通路・国土交通省の歩道を 1 つにつないだ経路網で、地下の待ち合わせ場所への道順を案内します。</div>
-    <label class="f">出発（地上の場所・出口・待ち合わせ場所）</label>
-    <select id="from"></select>
-    <label class="f">待ち合わせ場所</label>
-    <input type="text" id="q" placeholder="名前で探す（改札・地下街・店…）">
-    <select id="to" size="6"></select>
-    <div class="row" style="margin-top:8px">
-      <select id="pr"><option value="std">標準（いちばん早い）</option><option value="stair">階段を使う</option><option value="esc">エスカレーターを使う</option><option value="ev">エレベーターを使う（段差なし）</option></select>
-      <button class="p" id="go">案内</button>
-    </div>
-    <div class="row" style="margin-top:6px"><button class="s" id="swap">出発と待ち合わせ場所を入れ替え</button><button class="s" id="here">現在地から</button></div>
-    <div id="result"></div>
-    <h2>出典</h2>
-    <div class="small" id="credits"></div>
-  </div>
-  <div style="position:relative"><div id="map"></div><div class="lv" id="lv"></div></div>
-</div>
-<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
-<script type="module">
-import { Guide, lvName } from './guide.js?v=mvvp5zgw';
-// 駅は ?st=<駅>（無ければ池袋）。池袋は data/meet.json・../out/meet.json、ほかの駅は data/<駅>/meet.json・../out/<駅>/meet.json
-const STATIONS = { ikebukuro: { name: '池袋', origin: { lat: 35.7295, lon: 139.7109 } }, tokyo: { name: '東京', origin: { lat: 35.6806, lon: 139.7664 } } };
-const KEY = STATIONS[new URLSearchParams(location.search).get('st')] ? new URLSearchParams(location.search).get('st') : 'ikebukuro';
-const DATA = ['../data/meet.json?v=mvvp5zgw'].map((f) => (KEY === 'ikebukuro' ? f : f.replace('meet.json', `${KEY}/meet.json`)));
-const ORIGIN = STATIONS[KEY].origin;
-document.title = `${STATIONS[KEY].name} 待ち合わせ案内`; document.querySelector('h1').textContent = document.title;
-const a = 6378137, e2 = 0.00669438002290, phi = ORIGIN.lat * Math.PI / 180, w = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
-const KX = (Math.PI / 180) * (a / w) * Math.cos(phi), KY = (Math.PI / 180) * ((a * (1 - e2)) / w ** 3);
-const LL = (x, y) => [ORIGIN.lat + y / KY, ORIGIN.lon + x / KX];
-const XY = (lat, lon) => [(lon - ORIGIN.lon) * KX, (lat - ORIGIN.lat) * KY];
-const $ = (id) => document.getElementById(id);
-const ICON = { start: '出', goal: '着', walk: '→', cross: '渡', turnL: '↰', turnR: '↱', uturn: '↩', stair: '階', esc: 'エ', ev: 'EV', gate: '改' };
-const LCOL = { 1: '#8e44ad', 0: '#2ca02c', '-0.5': '#17becf', '-1': '#1f77b4', '-2': '#d62728', '-3': '#e377c2', '-4': '#7f7f7f' };
-
-let D, G, curLevel = -1, route = null, fromList = [], toList = [];
-const layers = L.layerGroup(), spotLayer = L.layerGroup();
-const map = L.map('map', { preferCanvas: true }).setView([ORIGIN.lat, ORIGIN.lon], 17);
-L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 22, maxNativeZoom: 19, opacity: 0.6, attribution: '© OpenStreetMap contributors' }).addTo(map);
-L.control.scale({ imperial: false }).addTo(map);
-spotLayer.addTo(map); layers.addTo(map);
-const N = (i) => D.nodes[i];
-
-function fillFrom() {
-  fromList = [...D.places.map((p) => ({ ...p, type: 'place', id: 'place:' + p.name })), ...D.exits.map((e) => ({ ...e, type: 'exit', id: 'exit:' + e.name })), ...D.spots.map((s) => ({ ...s, type: 'spot', id: 'spot:' + s.key }))];
-  const sel = $('from'); sel.innerHTML = '';
-  const grp = (label, items) => { const g = document.createElement('optgroup'); g.label = label; for (const it of items) { const o = document.createElement('option'); o.value = it.id; o.textContent = it.name + (it.type === 'spot' ? `（${lvName(it.level)}）` : ''); g.appendChild(o); } sel.appendChild(g); };
-  grp('地上の場所', fromList.filter((x) => x.type === 'place')); grp('出口の前（地上）', fromList.filter((x) => x.type === 'exit')); grp('待ち合わせ場所', fromList.filter((x) => x.type === 'spot'));
-}
-function fillTo(q = '') {
-  const sel = $('to'), keep = sel.value; sel.innerHTML = '';
-  toList = D.spots.map((s) => ({ ...s, type: 'spot', id: 'spot:' + s.key })).filter((s) => !q || s.name.includes(q) || s.kind.includes(q));
-  for (const s of toList) { const o = document.createElement('option'); o.value = s.id; o.textContent = `［${s.kind}］${s.name}（${lvName(s.level)}）`; sel.appendChild(o); }
-  if (keep && [...sel.options].some((o) => o.value === keep)) sel.value = keep;
-}
-const findItem = (id) => fromList.find((x) => x.id === id) || toList.find((x) => x.id === id) || (id && id.startsWith('spot:') ? D.spots.map((s) => ({ ...s, type: 'spot', id: 'spot:' + s.key })).find((x) => x.id === id) : null);
-
-function run() {
-  const from = findItem($('from').value), to = findItem($('to').value), pr = $('pr').value;
-  if (!from || !to) { $('result').innerHTML = '<div class="small">出発と待ち合わせ場所を選んでください。</div>'; return; }
-  route = G.route(from, to, pr);
-  if (!route) { $('result').innerHTML = `<div class="small">この条件では道が見つかりません。${pr === 'ev' ? '出口の階段やエスカレーターを使わない道が無いようです（出口のエレベーターの有無はデータにありません）。条件を「標準」にすると道が出ます。' : ''}</div>`; drawRoute(null); return; }
-  renderResult(); drawRoute(route);
-  const u = new URL(location.href); u.searchParams.set('from', from.id); u.searchParams.set('to', to.id); u.searchParams.set('pr', pr); history.replaceState(null, '', u);
-}
-function renderResult() {
-  const r = route, pr = $('pr').value, min = Math.max(1, Math.round(r.total / 60));
-  const stairs = r.counts[2] || 0, esc = r.counts[4] || 0, ev = r.counts[5] || 0;
-  const len = r.E.reduce((t, e) => t + e.len, 0);
-  let h = `<div class="sum"><b>約${min}分</b>・道のり約${Math.round(len / 10) * 10}m（地下を歩くのは約${Math.round(r.underLen / 10) * 10}m）<br>${stairs ? `階段 ${stairs}回` : '階段なし'}${esc ? `・エスカレーター ${esc}回` : ''}${ev ? `・エレベーター ${ev}回` : ''}<br>待ち合わせ場所: ${r.to.kind}・${r.to.name}（${lvName(r.to.level)}）</div>`;
-  h += '<ol class="steps">' + r.steps.map((s, i) => `<li data-i="${i}"><div class="ic ${s.icon}">${ICON[s.icon]}</div><div><div class="t">${i}. ${s.title}</div>${s.detail ? `<div class="d">${s.detail}</div>` : ''}</div></li>`).join('') + '</ol>';
-  const back = G.dijkstra(r.to.node, pr, false);
-  const ex = D.exits.map((e) => ({ e, d: back.dist[e.node] })).filter((x) => x.d < Infinity).sort((p, q) => p.d - q.d).slice(0, 4);
-  if (ex.length) h += `<h2>待ち合わせ場所に近い出口</h2><div class="exits">${ex.map((x) => `<button class="s" data-exit="exit:${x.e.name}">${x.e.name}（約${Math.max(1, Math.round(x.d / 60))}分）</button>`).join('')}</div>`;
-  const u = new URL(location.href); u.searchParams.set('from', r.from.id); u.searchParams.set('to', r.to.id); u.searchParams.set('pr', pr);
-  h += `<h2>あいてに送る</h2><div class="share">${u.href}</div><div class="row" style="margin-top:4px"><button class="s" id="copy">リンクをコピー</button><button class="s" id="copyText">案内文をコピー</button></div>`;
-  h += `<h2>立体で歩く</h2><div class="small"><a href="../walk/?st=${KEY}&mfrom=${encodeURIComponent(r.from.id)}&mto=${encodeURIComponent(r.to.id)}&pr=${pr}" target="_blank" rel="noopener">同じ道を人の目線で歩く（歩く画面。地上の区間は図で、駅・地下街に入ってから立体）</a></div>`;
-  $('result').innerHTML = h;
-  $('result').querySelectorAll('li').forEach((li) => (li.onclick = () => selectStep(+li.dataset.i)));
-  $('result').querySelectorAll('[data-exit]').forEach((b) => (b.onclick = () => { $('from').value = b.dataset.exit; run(); }));
-  $('copy').onclick = () => navigator.clipboard.writeText(u.href);
-  $('copyText').onclick = () => navigator.clipboard.writeText(`${r.from.name} → ${r.to.name}（約${min}分）\n` + r.steps.map((s, i) => `${i}. ${s.title}${s.detail ? '　' + s.detail : ''}`).join('\n') + '\n' + u.href + '\n© OpenStreetMap contributors（ODbL）');
-}
-function drawRoute(r) {
-  layers.clearLayers();
-  if (!r) return;
-  const bounds = [];
-  r.steps.forEach((s, i) => {
-    if (!s.seg) { const n = N(i === 0 ? r.from.node : r.goal); const m = L.circleMarker(LL(n[0], n[1]), { radius: 8, color: '#333', fillColor: i === 0 ? '#fff' : '#ffeb3b', fillOpacity: 1, weight: 2 }).bindTooltip(i === 0 ? '出発' : '到着', { permanent: true, direction: 'top', className: 'stepno' }); layers.addLayer(m); bounds.push(LL(n[0], n[1])); return; }
-    const ed = [...(s.seg.lead || []), ...s.seg.edges, ...(s.seg.tail || [])];
-    const pts = [LL(N(ed[0].a)[0], N(ed[0].a)[1]), ...ed.map((e) => LL(N(e.b)[0], N(e.b)[1]))];
-    pts.forEach((p) => bounds.push(p));
-    const lv = N(s.seg.from)[2], col = LCOL[lv] || '#555';
-    const dim = curLevel !== 'all' && lv !== curLevel && N(s.seg.to)[2] !== curLevel;
-    const pl = L.polyline(pts, { color: col, weight: dim ? 3 : 6, opacity: dim ? 0.35 : 0.9, dashArray: s.seg.kind === 'vert' ? '6 6' : s.seg.edges.some((e) => e.guess) ? '2 6' : null });
-    const n0 = N(s.seg.from); const m = L.circleMarker(LL(n0[0], n0[1]), { radius: 9, color: col, fillColor: '#fff', fillOpacity: 1, weight: 2 }).bindTooltip(String(i), { permanent: true, direction: 'center', className: 'stepno' });
-    pl.on('click', () => selectStep(i)); m.on('click', () => selectStep(i));
-    layers.addLayer(pl); layers.addLayer(m);
-  });
-  if (bounds.length) map.fitBounds(bounds, { padding: [30, 30] });
-}
-function selectStep(i) {
-  const s = route.steps[i];
-  document.querySelectorAll('ol.steps li').forEach((li) => li.classList.toggle('sel', +li.dataset.i === i));
-  if (s.seg) { const lv = N(s.seg.from)[2]; if (lv !== curLevel) { curLevel = lv; renderLv(); drawRoute(route); drawSpots(); } const ed = s.seg.edges; map.fitBounds(ed.map((e) => LL(N(e.b)[0], N(e.b)[1])).concat([LL(N(ed[0].a)[0], N(ed[0].a)[1])]), { padding: [40, 40], maxZoom: 20 }); }
-  else { const n = N(i === 0 ? route.from.node : route.goal); if (n[2] !== curLevel) { curLevel = n[2]; renderLv(); drawRoute(route); drawSpots(); } map.setView(LL(n[0], n[1]), 19); }
-  document.querySelectorAll('ol.steps li')[i]?.scrollIntoView({ block: 'nearest' });
-}
-function renderLv() {
-  const el = $('lv'); el.innerHTML = '';
-  for (const [lv, name] of [[1, '2F'], [0, '地上'], ...[-1, -2, -3, -4, -5].filter((l) => l >= -2 || D.nodes.some((n) => n[2] === l)).map((l) => [l, `B${-l}`]), ['all', '全部']]) { const b = document.createElement('button'); b.textContent = name; b.className = curLevel === lv ? 'on' : ''; b.onclick = () => { curLevel = lv; renderLv(); drawRoute(route); drawSpots(); }; el.appendChild(b); }
-}
-function drawSpots() {
-  spotLayer.clearLayers();
-  for (const s of D.spots) { if (curLevel !== 'all' && s.level !== curLevel) continue; const m = L.circleMarker(LL(s.x, s.y), { radius: 4, color: '#8e44ad', fillColor: '#8e44ad', fillOpacity: 0.6, weight: 1 }).bindTooltip(s.name); m.on('click', () => { $('q').value = ''; fillTo(''); $('to').value = 'spot:' + s.key; run(); }); spotLayer.addLayer(m); }
-  for (const e of D.exits) { if (curLevel !== 'all' && e.level !== curLevel) continue; const m = L.circleMarker(LL(e.x, e.y), { radius: 4, color: '#2ca02c', fillColor: '#fff', fillOpacity: 1, weight: 2 }).bindTooltip(e.name); m.on('click', () => { $('from').value = 'exit:' + e.name; run(); }); spotLayer.addLayer(m); }
-}
-
-fetch(DATA[0]).then((r) => (r.ok ? r.json() : fetch(DATA[1]).then((r2) => r2.json()))).then((d) => {
-  D = d; G = new Guide(D); fillFrom(); fillTo(); renderLv(); drawSpots();
-  $('credits').textContent = D.credits.join(' ／ ');
-  const u = new URL(location.href);
-  if (u.searchParams.get('from')) $('from').value = u.searchParams.get('from');
-  if (u.searchParams.get('to')) { fillTo(''); $('to').value = u.searchParams.get('to'); }
-  if (u.searchParams.get('pr')) $('pr').value = u.searchParams.get('pr');
-  if (!$('to').value && $('to').options.length) $('to').selectedIndex = 0;
-  if (u.searchParams.get('to')) run();
-  window.meet = { get D() { return D; }, get G() { return G; }, get route() { return route; }, run };
-});
-$('go').onclick = run; $('to').onchange = run; $('from').onchange = () => route && run(); $('pr').onchange = () => route && run();
-$('q').oninput = () => fillTo($('q').value.trim());
-$('swap').onclick = () => { const f = $('from').value, t = $('to').value; if (!t) return; if (f.startsWith('spot:')) { $('q').value = ''; fillTo(''); $('to').value = f; } $('from').value = t; run(); };
-$('here').onclick = () => { if (!navigator.geolocation) return alert('この端末では位置が取れません'); navigator.geolocation.getCurrentPosition((p) => { const [x, y] = XY(p.coords.latitude, p.coords.longitude); let best = -1, bd = 3000; D.nodes.forEach((n, i) => { if (n[2] !== 0 || !G.adj[i].length) return; const d = Math.hypot(n[0] - x, n[1] - y); if (d < bd) { bd = d; best = i; } }); if (best < 0) return alert('駅から 3 km 以内で使ってください'); fromList.push({ name: '現在地', type: 'place', id: 'place:現在地', node: best, note: 'いまいる場所のそばの歩道から案内します。' }); const o = document.createElement('option'); o.value = 'place:現在地'; o.textContent = '現在地'; $('from').appendChild(o); $('from').value = 'place:現在地'; run(); }, () => alert('位置が取れませんでした'), { enableHighAccuracy: true, timeout: 8000 }); };
+<title>待ち合わせ案内</title>
+<script>
+// 待ち合わせ案内は歩く画面（walk/）の「地図で見る」に入れた（利用者 2026-10-31「meet と walk を融合したい。シームレスに行き来できるように」）。
+// 前のリンク（?st=・from=・to=・pr=）をそのまま歩く画面の地図へ渡す
+(function () {
+  var q = new URLSearchParams(location.search), o = new URLSearchParams();
+  o.set('st', q.get('st') || 'ikebukuro');
+  o.set('view', 'map');
+  if (q.get('from')) o.set('mfrom', q.get('from'));
+  if (q.get('to')) o.set('mto', q.get('to'));
+  if (q.get('pr')) o.set('pr', q.get('pr'));
+  location.replace('../walk/?' + o.toString());
+})();
 </script>
-</body>
+</head>
+<body><p>待ち合わせ案内は「歩く」画面に移りました。<a href="../walk/?st=ikebukuro&view=map">こちら</a></p></body>
 </html>

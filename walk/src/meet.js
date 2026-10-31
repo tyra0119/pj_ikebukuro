@@ -2,11 +2,11 @@
 // 同じ経路を「図と手順」（この画面のパネル）と「立体」（床の矢印・案内カード）の両方で見せる。手順を押すとその場所へ立体で飛ぶ。
 // 地上の歩道にも床があるので、出発から立体で歩ける。立体に床の無い点（地下 2 階・データの範囲外）の区間だけ図と手順で案内する。
 
-import { Guide, lvName } from './guide.js?v=mvvp5zgw';
-import { startRoom, roomId } from './room.js?v=mvvp5zgw';
+import { Guide, lvName } from './guide.js?v=mvvpq6mg';
+import { startRoom, roomId } from './room.js?v=mvvpq6mg';
 
 export async function initMeet(A) {
-  const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared, setMeetRoute, clearRoute } = A;
+  const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared, setMeetRoute, clearRoute, view } = A; // view: 地図で見ているか・切り替え・地図をある所へ（app.js）
   let D;
   try { D = await fetch(`data/${data.key === 'ikebukuro' ? 'meet' : `meet-${data.key}`}.json${VER}`).then((r) => r.json()); } catch { return; } // 池袋は meet.json、ほかの駅は meet-<駅>.json
   const G = new Guide(D);
@@ -99,7 +99,7 @@ export async function initMeet(A) {
   $('meetPanel').onclick = (e) => { if (e.target === $('meetPanel')) $('meetPanel').hidden = true; };
   $('meetGo').onclick = () => run();
   toSel.onchange = () => run();
-  $('meetWalk').onclick = () => { if (cur) walkFrom(cur.walkFrom); };
+  $('meetWalk').onclick = () => { if (!cur) return; if (view && view.map && cur.walkFrom >= 0) view.set(false); walkFrom(cur.walkFrom); }; // 地図で見ていれば立体に切り替えて歩きはじめる
   $('meetShare').onclick = async () => {
     if (!cur) return;
     if (!room) { startShare('a', roomId()); const u = new URL(location.href); u.searchParams.set('room', room.id); u.searchParams.set('role', 'a'); history.replaceState(null, '', u); }
@@ -124,6 +124,8 @@ export async function initMeet(A) {
     if (!r) { $('meetSum').textContent = 'この条件では道が見つかりません。' + (pr === 'ev' ? '条件を「標準」にすると出ます。' : ''); $('meetSteps').innerHTML = ''; return; }
     const { pts, first } = toPts(r.E);
     cur = { from, to, pr, r, pts, walkFrom: first };
+    shared.route = pts; // 地図で見るときに道を描く（app.js の drawMini）
+    if (view && view.map && pts.length) view.focus(pts[0].x, pts[0].y, pts[0].l); // 地図で見ていれば出発の所へ
     const u = new URL(location.href); u.searchParams.set('mfrom', from.id); u.searchParams.set('mto', to.id); u.searchParams.set('pr', pr); history.replaceState(null, '', u);
     // 立体の案内: 床のある部分の道筋を固定の経路として渡す
     if (first >= 0) {
@@ -204,7 +206,7 @@ export async function initMeet(A) {
       b.innerHTML = `<span class="no ${cls}">${s.icon === 'start' ? '出' : s.icon === 'goal' ? '着' : k}</span><span><span class="t"></span>${s.detail ? `<br><small class="d"></small>` : ''}</span><small>${walk ? '立体' : '図'}</small>`;
       b.querySelector('.t').textContent = s.title; if (s.detail) b.querySelector('.d').textContent = s.detail;
       if (k === nearK) li.classList.add('here');
-      b.onclick = () => { if (!walk) { toast('ここは地上の区間です（立体には床がありません）。地図と文で案内します'); return; } const n = N(ni); $('meetPanel').hidden = true; jumpTo(n[0], n[1], WL(n[2]), true); };
+      b.onclick = () => { const n = N(ni); if (view && view.map) { view.focus(n[0], n[1], WL(n[2]) ?? 1); highlight(k); return; } if (!walk) { toast('ここは地上の区間です（立体には床がありません）。地図と文で案内します'); return; } $('meetPanel').hidden = true; jumpTo(n[0], n[1], WL(n[2]), true); }; // 地図で見ているときは、その手順の所・階を地図に出す（地上の区間も）
       li.append(b); ol.append(li);
     });
     $('meetWalk').disabled = cur.walkFrom < 0;

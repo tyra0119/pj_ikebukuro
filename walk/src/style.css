@@ -222,3 +222,24 @@ body.touch .pc, body:not(.touch) .touch { display: none; }
 #meetSteps > li > button > small:last-child { color: var(--sub); font-size: 11px; margin-left: auto; white-space: nowrap; border: 1px solid var(--line); border-radius: 8px; padding: 1px 6px; }
 
 #meetPartner { background: #fff3e0; border-left: 3px solid #f08c00; padding: 6px 8px; border-radius: 6px; font-size: 13px; }
+
+/* 地図で見る（待ち合わせ案内と歩く立体を 1 つの画面に。利用者 2026-10-31「meet と walk を融合したい。シームレスに行き来できるように」）:
+   小さな地図を画面いっぱいに広げ、立体は描かない。待ち合わせ案内のパネルは地図を隠さないよう左の帯（スマホは下半分）にする */
+body.mapMode #mini { left: 0; top: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; box-shadow: none; z-index: 1; }
+body.mapMode #top, body.mapMode #leftBtns, body.mapMode #guide, body.mapMode #replayBar { z-index: 2; }
+body.mapMode #credit { z-index: 2; color: #555; text-shadow: none; background: rgba(255,255,255,0.7); padding: 1px 4px; border-radius: 4px; }
+body.mapMode #view, body.mapMode #stick, body.mapMode #mBig, body.mapMode #compass { visibility: hidden; }
+body.mapMode .mapBtns { right: 12px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 18px); }
+body.mapMode .floorPick { left: auto; right: 12px; top: 64px; max-height: calc(100% - 300px); }
+body.mapMode #viewBtn { background: var(--accent); color: #fff; }
+body.mapMode #meetPanel { inset: auto; left: 0; top: 0; bottom: 0; width: min(400px, 100vw); background: none; place-items: stretch; pointer-events: none; }
+body.mapMode #meetPanel .sheet { pointer-events: auto; max-height: none; height: 100%; border-radius: 0 14px 14px 0; box-sizing: border-box; }
+body.mapMode #meetMap { display: none; }
+body.mapMode.meetSide #mini { left: min(400px, 100vw); width: auto; } /* 案内のパネルの横（スマホは上）だけを地図に */
+body.mapMode.meetBottom #mini { bottom: 52vh; height: auto; }
+body.mapMode.meetBottom .floorPick { top: 8px; max-height: calc(100% - 170px); }
+body.mapMode.meetBottom #leftBtns > :not(#viewBtn), body.mapMode.meetBottom #guide, body.mapMode.meetBottom #credit { display: none; } /* スマホで案内のパネルを開いた地図: 上の半分に地図だけ（手順はパネルに） */
+@media (max-width: 760px) {
+  body.mapMode #meetPanel { top: auto; width: 100vw; height: 52vh; }
+  body.mapMode #meetPanel .sheet { border-radius: 14px 14px 0 0; }
+}

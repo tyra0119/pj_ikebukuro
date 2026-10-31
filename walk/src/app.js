@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvvp5zgw';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvp5zgw';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvp5zgw';
-import { addTrains } from './trains.js?v=mvvp5zgw';
-import { routeSteps, stepLine } from './steps.js?v=mvvp5zgw';
-import { initMeet } from './meet.js?v=mvvp5zgw';
+import { initPhoto } from './photo.js?v=mvvpq6mg';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvpq6mg';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvpq6mg';
+import { addTrains } from './trains.js?v=mvvpq6mg';
+import { routeSteps, stepLine } from './steps.js?v=mvvpq6mg';
+import { initMeet } from './meet.js?v=mvvpq6mg';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvvp5zgw'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvvpq6mg'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -1464,6 +1464,10 @@ const S2W = (sx, sy) => {
 };
 const fillAll = (A) => { for (const p of A) mg.fill(p); }, strokeAll = (A) => { for (const p of A) mg.stroke(p); };
 function drawMini() {
+  { // 地図で見ていて待ち合わせ案内のパネルが開いているときは、地図をパネルの横（スマホは上）に
+    const open = mapMode && !$('meetPanel').hidden, side = open && innerWidth > 760, bottom = open && !side;
+    if (side !== document.body.classList.contains('meetSide') || bottom !== document.body.classList.contains('meetBottom')) { document.body.classList.toggle('meetSide', side); document.body.classList.toggle('meetBottom', bottom); miniSize(); }
+  }
   if (mini.follow) { mini.cx = me.x; mini.cy = me.y; }
   if (mini.follow && mini.head) mini.rot = me.yaw;
   const W = mcv.clientWidth, H = mcv.clientHeight, dpr = devicePixelRatio;
@@ -1476,12 +1480,15 @@ function drawMini() {
   const P = paths[pl];
   mg.setTransform(dpr * k * c, -dpr * k * s, -dpr * k * s, -dpr * k * c, dpr * (W / 2 - k * (c * mini.cx - s * mini.cy)), dpr * (H / 2 + k * (s * mini.cx + c * mini.cy)));
   const gphoto = pl === '1' && photoCity && photoCity.ground; // 写真の街並みのときは航空写真
+  if (mapMode) drawBase(W, H, pl);
   if (gphoto) { const e = gphoto.ext; mg.save(); mg.translate(e.w, e.n); mg.scale(1, -1); mg.drawImage(gphoto.canvas, 0, 0, e.e - e.w, e.n - e.s); mg.restore(); }
   else {
+    if (mapMode) mg.globalAlpha = 0.75; // 下地の淡色地図（通りの名前）が透けるように
     mg.fillStyle = '#f4f2ed'; fillAll(P.gside);
     mg.fillStyle = '#c3c6cb'; fillAll(P.groad);
     mg.fillStyle = '#dcd5c8'; fillAll(P.gbld);
     mg.strokeStyle = '#c2b9aa'; mg.lineWidth = 0.8 / k; strokeAll(P.gbld);
+    mg.globalAlpha = 1;
   }
   mg.fillStyle = '#fbfaf6'; fillAll(P.mall);
   mg.fillStyle = '#ffffff'; fillAll(P.floor);
@@ -1491,6 +1498,16 @@ function drawMini() {
   for (const r of ramps2d) if (String(r.la) === pl || String(r.lb) === pl) {
     const len = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]), nx = (-(r.b[1] - r.a[1]) / len) * r.w / 2, ny = ((r.b[0] - r.a[0]) / len) * r.w / 2;
     mg.beginPath(); mg.moveTo(r.a[0] + nx, r.a[1] + ny); mg.lineTo(r.b[0] + nx, r.b[1] + ny); mg.lineTo(r.b[0] - nx, r.b[1] - ny); mg.lineTo(r.a[0] - nx, r.a[1] - ny); mg.fill();
+  }
+  // 待ち合わせ案内の道（地図で見ているとき。立体に床の無い地上の区間も、灰色の点線で）
+  if (mapMode && meetShared.route) {
+    const R = meetShared.route; mg.lineWidth = 5 / k; mg.lineJoin = 'round'; mg.lineCap = 'round';
+    for (let i = 1; i < R.length; i++) {
+      const a = R[i - 1], b = R[i]; if (String(a.l) !== pl && String(b.l) !== pl) continue;
+      const g = a.ground || b.ground; mg.strokeStyle = g ? 'rgba(110,110,110,0.9)' : 'rgba(240,140,0,0.85)'; mg.setLineDash(g ? [6 / k, 5 / k] : []);
+      mg.beginPath(); mg.moveTo(a.x, a.y); mg.lineTo(b.x, b.y); mg.stroke();
+    }
+    mg.setLineDash([]);
   }
   // 道筋
   if (nav.pts) {
@@ -1677,6 +1694,42 @@ $('mLocate').onclick = () => {
   if (mini.follow && mini.floor == null) { mini.head = !mini.head; if (!mini.head) mini.rot = 0; }
   mini.follow = true; mini.floor = null;
 };
+// 地図で見る ⇄ 立体で見る（待ち合わせ案内の図と歩く立体を 1 つの画面で行き来する。利用者 2026-10-31「meet と walk を融合したい。シームレスに行き来できるように」
+// 「meet は地上以外も表示してほしい」）: 小さな地図を画面いっぱいに広げ、下に国土地理院の淡色地図を敷く。位置・向き・行き先・案内はそのまま。URL の ?view=map で地図から
+let mapMode = false;
+function setMapMode(on) {
+  mapMode = on;
+  document.body.classList.toggle('mapMode', on);
+  $('viewBtn').textContent = on ? '立体で見る' : '地図で見る';
+  if (on && $('mini').classList.contains('big')) $('mBig').onclick();
+  miniSize();
+  const cr = $('credit'); if (cr) { cr.textContent = cr.textContent.replace(/ ／ 地図: 国土地理院（淡色地図）$/, ''); if (on) cr.textContent += ' ／ 地図: 国土地理院（淡色地図）'; }
+  try { const u = new URL(location.href); if (on) u.searchParams.set('view', 'map'); else u.searchParams.delete('view'); history.replaceState(null, '', u); } catch (err) { void err; }
+}
+$('viewBtn').onclick = () => setMapMode(!mapMode);
+// 地図のある場所・階へ（待ち合わせ案内の手順を押したとき）
+function mapFocus(x, y, l) { mini.follow = false; mini.head = false; mini.cx = x; mini.cy = y; mini.floor = String(l) === String(levelOf(me.z)) ? null : String(l); if (mini.s < 2) mini.s = 2; }
+// 下地: 国土地理院の淡色地図のタイルを、地図の向き・縮尺に合わせて局所平面の上に並べる（地下・2F は薄く。地上は立体の歩道・道路・建物を少し透かして重ねる）
+const baseTiles = new Map();
+function drawBase(W, H, pl) {
+  const cs = [S2W(0, 0), S2W(W, 0), S2W(0, H), S2W(W, H)], xs = cs.map((p) => p[0]), ys = cs.map((p) => p[1]), o = data.origin;
+  const lon0 = o.lon + Math.min(...xs) / GEO.kx, lon1 = o.lon + Math.max(...xs) / GEO.kx, lat0 = o.lat + Math.min(...ys) / GEO.ky, lat1 = o.lat + Math.max(...ys) / GEO.ky;
+  const z = Math.max(12, Math.min(18, Math.round(Math.log2((40075016 * Math.cos((o.lat * Math.PI) / 180) * mini.s) / 256))));
+  const n = 2 ** z, tx = (lon) => Math.floor(((lon + 180) / 360) * n), ty = (lat) => { const r = (lat * Math.PI) / 180; return Math.floor(((1 - Math.log(Math.tan(r) + 1 / Math.cos(r)) / Math.PI) / 2) * n); };
+  const lonOf = (x) => (x / n) * 360 - 180, latOf = (y) => (Math.atan(Math.sinh(Math.PI * (1 - (2 * y) / n))) * 180) / Math.PI;
+  const X0 = tx(lon0), X1 = tx(lon1), Y0 = ty(lat1), Y1 = ty(lat0);
+  if ((X1 - X0 + 1) * (Y1 - Y0 + 1) > 120) return;
+  mg.globalAlpha = pl === '1' ? 1 : 0.4;
+  for (let X = X0; X <= X1; X++) for (let Y = Y0; Y <= Y1; Y++) {
+    const key = `${z}/${X}/${Y}`; let im = baseTiles.get(key);
+    if (!im) { im = new Image(); im.src = `https://cyberjapandata.gsi.go.jp/xyz/pale/${key}.png`; baseTiles.set(key, im); if (baseTiles.size > 600) baseTiles.delete(baseTiles.keys().next().value); }
+    if (!im.complete || !im.naturalWidth) continue;
+    const xw = (lonOf(X) - o.lon) * GEO.kx, xe = (lonOf(X + 1) - o.lon) * GEO.kx, yn = (latOf(Y) - o.lat) * GEO.ky, yS = (latOf(Y + 1) - o.lat) * GEO.ky;
+    mg.save(); mg.translate(xw, yn); mg.scale(1, -1); mg.drawImage(im, 0, 0, xe - xw + 0.05, yn - yS + 0.05); mg.restore();
+  }
+  mg.globalAlpha = 1;
+}
+
 // 地図を大きく・小さく（地図の右上のボタン）
 const BIG_ICON = $('mBig').innerHTML, SMALL_ICON = '<svg viewBox="0 0 24 24" width="18" height="18"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5" fill="none" stroke="#444" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"/></svg>';
 $('mBig').onclick = () => {
@@ -2014,8 +2067,9 @@ if (!replaying) {
 
 // ---------- 待ち合わせ案内（統合データ。図と手順 + 立体） ----------
 const meetShared = { p: null }; // あいての位置（小さな地図が描く）
-const meet = await initMeet({ $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared: meetShared, setMeetRoute: (r) => { nav.fixed = r; setDest(r); }, clearRoute: () => setDest(null) });
+const meet = await initMeet({ $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared: meetShared, view: { get map() { return mapMode; }, set: setMapMode, focus: mapFocus }, setMeetRoute: (r) => { nav.fixed = r; setDest(r); }, clearRoute: () => setDest(null) });
 groundTreeFn = meet.groundTree;
+if (new URLSearchParams(location.search).get('view') === 'map') setMapMode(true); // 地図で開く（meet/ の古いリンクもここへ来る）
 // 空と霧: 地下は近くで霧が濃い（30〜170 m）。地上（1F より上）では遠くまで見えるように霧を 60〜600 m にし、空を明るくする
 // （利用者 2026-10-30「地上を歩いてると遠くが見えないので、恐い印象を与える」）。地上の範囲（±450 m）の外には平らな地面を敷く（空の色の穴が見えないように）
 const SKY = { in: new THREE.Color('#c3c8cc'), out: new THREE.Color('#d3dfe9'), near: [30, 60], far: [170, 600] };
@@ -2211,7 +2265,7 @@ function frame(now) {
   if (photoCity && now - photoAt > 3000) { photoAt = now; photoCity.update(); } // スマホの写真の街並み: 近くのタイルを読み足す
   drawMini();
   drawCompass();
-  renderer.render(scene, camera);
+  if (!mapMode) renderer.render(scene, camera); // 地図で見ているあいだは立体を描かない
   requestAnimationFrame(frame);
 }
 $('loading').hidden = true;
