@@ -31,7 +31,7 @@
 <div id="side">
   <h1>池袋 4 データの重ね合わせ</h1>
   <div class="stats" id="stats">読み込み中…</div>
-  <p>駅: <a data-stsel="ikebukuro" href="?st=ikebukuro">池袋</a> ・ <a data-stsel="tokyo" href="?st=tokyo">東京</a></p>
+  <p>駅: <a data-stsel="ikebukuro" href="?st=ikebukuro">池袋</a> ・ <a data-stsel="tokyo" href="?st=tokyo">東京</a> ・ <a data-stsel="shinjuku" href="?st=shinjuku">新宿</a></p>
   <p><a data-st href="walk/?st=ikebukuro" target="_blank" rel="noopener"><b>歩く（立体）</b></a> … まとめた床・壁・坂を人の目線で歩く（Ekisanpo の仕組み）</p>
   <p><a data-meet href="meet/" target="_blank" rel="noopener"><b>待ち合わせ案内</b></a> … まとめた経路網で、地下の待ち合わせ場所への道順を案内する</p>
   <h2>階</h2>
@@ -47,7 +47,7 @@
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
 // 駅は ?st=<駅>（無ければ池袋）。池袋は data/merged.json・../out/merged.json、ほかの駅は data/<駅>/・../out/<駅>/
-const STATIONS = { ikebukuro: { name: '池袋', origin: { lat: 35.7295, lon: 139.7109 } }, tokyo: { name: '東京', origin: { lat: 35.6806, lon: 139.7664 } } };
+const STATIONS = { ikebukuro: { name: '池袋', origin: { lat: 35.7295, lon: 139.7109 } }, tokyo: { name: '東京', origin: { lat: 35.6806, lon: 139.7664 } }, shinjuku: { name: '新宿', origin: { lat: 35.6929, lon: 139.7008 } } };
 const KEY = STATIONS[new URLSearchParams(location.search).get('st')] ? new URLSearchParams(location.search).get('st') : 'ikebukuro';
 const SUB = KEY === 'ikebukuro' ? '' : `${KEY}/`;
 const ORIGIN = STATIONS[KEY].origin;
@@ -227,7 +227,7 @@ function renderIssues() {
   }
 }
 
-const DATA = [`data/${SUB}merged.json?v=mvvvw5p1`];
+const DATA = [`data/${SUB}merged.json?v=mvvw7ct8`];
 const load = (i) => fetch(DATA[i]).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch((e) => (i + 1 < DATA.length ? load(i + 1) : Promise.reject(e)));
 load(0).then((d) => {
   D = d;

@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvvvw5p1';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvvw5p1';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvvw5p1';
-import { addTrains } from './trains.js?v=mvvvw5p1';
-import { routeSteps, stepLine } from './steps.js?v=mvvvw5p1';
-import { initMeet } from './meet.js?v=mvvvw5p1';
+import { initPhoto } from './photo.js?v=mvvw7ct8';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvw7ct8';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvw7ct8';
+import { addTrains } from './trains.js?v=mvvw7ct8';
+import { routeSteps, stepLine } from './steps.js?v=mvvw7ct8';
+import { initMeet } from './meet.js?v=mvvw7ct8';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvvvw5p1'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvvw7ct8'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([

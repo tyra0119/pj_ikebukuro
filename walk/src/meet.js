@@ -2,8 +2,8 @@
 // 同じ経路を「図と手順」（この画面のパネル）と「立体」（床の矢印・案内カード）の両方で見せる。手順を押すとその場所へ立体で飛ぶ。
 // 地上の歩道にも床があるので、出発から立体で歩ける。立体に床の無い点（地下 2 階・データの範囲外）の区間だけ図と手順で案内する。
 
-import { Guide, lvName } from './guide.js?v=mvvvw5p1';
-import { startRoom, roomId } from './room.js?v=mvvvw5p1';
+import { Guide, lvName } from './guide.js?v=mvvw7ct8';
+import { startRoom, roomId } from './room.js?v=mvvw7ct8';
 
 export async function initMeet(A) {
   const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared, setMeetRoute, clearRoute, view } = A; // view: 地図で見ているか・切り替え・地図をある所へ（app.js）
