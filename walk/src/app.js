@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvvzy5e5';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvzy5e5';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvzy5e5';
-import { addTrains } from './trains.js?v=mvvzy5e5';
-import { routeSteps, stepLine } from './steps.js?v=mvvzy5e5';
-import { initMeet } from './meet.js?v=mvvzy5e5';
+import { initPhoto } from './photo.js?v=mvw0bcr9';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvw0bcr9';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvw0bcr9';
+import { addTrains } from './trains.js?v=mvw0bcr9';
+import { routeSteps, stepLine } from './steps.js?v=mvw0bcr9';
+import { initMeet } from './meet.js?v=mvw0bcr9';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvvzy5e5'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvw0bcr9'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const PRE = window.ekisanpoPre || {}; // index.html で先に読みはじめたデータ（同じ駅のときだけ使う）
 const STATIONS = await (PRE.stations || Promise.reject()).catch(() => fetch(`data/stations.json${VER}`).then((r) => r.json()));
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
@@ -1480,10 +1480,9 @@ for (const l of Object.keys(LV)) {
 const ramps2d = data.ramps;
 let photoBtnSync = null; // 写真の街並みのボタンを、見ている階に合わせて出し入れする
 let photoCity = null; // 写真の街並み（photo.js）。1F の小さな地図に航空写真を敷く
-function miniSize() {
-  const r = mcv.getBoundingClientRect();
-  mcv.width = Math.round(r.width * devicePixelRatio);
-  mcv.height = Math.round(r.height * devicePixelRatio);
+function miniSize() { // 大きさは変形（地図 ⇄ 立体の切り替えで縮む・広がるアニメーション）を含まない clientWidth で（含めると、切り替えの途中に測って地図が描けなくなった）
+  mcv.width = Math.round(mcv.clientWidth * devicePixelRatio);
+  mcv.height = Math.round(mcv.clientHeight * devicePixelRatio);
 }
 const W2S = (x, y) => {
   const W = mcv.clientWidth, H = mcv.clientHeight, c = Math.cos(mini.rot), s = Math.sin(mini.rot);
