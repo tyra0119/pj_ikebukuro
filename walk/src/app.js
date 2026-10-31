@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvvpq6mg';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvpq6mg';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvpq6mg';
-import { addTrains } from './trains.js?v=mvvpq6mg';
-import { routeSteps, stepLine } from './steps.js?v=mvvpq6mg';
-import { initMeet } from './meet.js?v=mvvpq6mg';
+import { initPhoto } from './photo.js?v=mvvqht39';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvqht39';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvqht39';
+import { addTrains } from './trains.js?v=mvvqht39';
+import { routeSteps, stepLine } from './steps.js?v=mvvqht39';
+import { initMeet } from './meet.js?v=mvvqht39';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvvpq6mg'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvvqht39'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -1467,6 +1467,15 @@ function drawMini() {
   { // 地図で見ていて待ち合わせ案内のパネルが開いているときは、地図をパネルの横（スマホは上）に
     const open = mapMode && !$('meetPanel').hidden, side = open && innerWidth > 760, bottom = open && !side;
     if (side !== document.body.classList.contains('meetSide') || bottom !== document.body.classList.contains('meetBottom')) { document.body.classList.toggle('meetSide', side); document.body.classList.toggle('meetBottom', bottom); miniSize(); }
+  }
+  { // 地図で見ているとき、右上の階のボタンが案内のカードと重なるなら、カードの下へよける（スマホは案内のカードが横いっぱい。利用者 2026-10-31「右上のフロアボタンと案内がかぶってる」）
+    const fp = $('floorPick'), g = $('guide');
+    let top = '';
+    if (mapMode && !g.hidden && getComputedStyle(g).display !== 'none') {
+      const gr = g.getBoundingClientRect(), fr = fp.getBoundingClientRect(), mr = $('mini').getBoundingClientRect();
+      if (gr.right > fr.left - 4 && gr.left < fr.right + 4) top = `${Math.round(gr.bottom - mr.top + 8)}px`;
+    }
+    if (fp.style.top !== top) fp.style.top = top;
   }
   if (mini.follow) { mini.cx = me.x; mini.cy = me.y; }
   if (mini.follow && mini.head) mini.rot = me.yaw;

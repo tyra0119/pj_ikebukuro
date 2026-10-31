@@ -227,7 +227,7 @@ function renderIssues() {
   }
 }
 
-const DATA = [`data/${SUB}merged.json?v=mvvpq6mg`];
+const DATA = [`data/${SUB}merged.json?v=mvvqht39`];
 const load = (i) => fetch(DATA[i]).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch((e) => (i + 1 < DATA.length ? load(i + 1) : Promise.reject(e)));
 load(0).then((d) => {
   D = d;
