@@ -2,13 +2,15 @@
 // 同じ経路を「図と手順」（この画面のパネル）と「立体」（床の矢印・案内カード）の両方で見せる。手順を押すとその場所へ立体で飛ぶ。
 // 地上の歩道にも床があるので、出発から立体で歩ける。立体に床の無い点（地下 2 階・データの範囲外）の区間だけ図と手順で案内する。
 
-import { Guide, lvName } from './guide.js?v=mvvw7ct8';
-import { startRoom, roomId } from './room.js?v=mvvw7ct8';
+import { Guide, lvName } from './guide.js?v=mvvwdiu7';
+import { startRoom, roomId } from './room.js?v=mvvwdiu7';
 
 export async function initMeet(A) {
   const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared, setMeetRoute, clearRoute, view } = A; // view: 地図で見ているか・切り替え・地図をある所へ（app.js）
   let D;
-  try { D = await fetch(`data/${data.key === 'ikebukuro' ? 'meet' : `meet-${data.key}`}.json${VER}`).then((r) => r.json()); } catch { return; } // 池袋は meet.json、ほかの駅は meet-<駅>.json
+  const load = () => fetch(`data/${data.key === 'ikebukuro' ? 'meet' : `meet-${data.key}`}.json${VER}`).then((r) => r.json());
+  const PRE = window.ekisanpoPre; // index.html で先に読みはじめたもの（同じ駅のとき）
+  try { D = await (PRE && PRE.key === data.key && PRE.meet ? PRE.meet.catch(load) : load()); } catch { return; } // 池袋は meet.json、ほかの駅は meet-<駅>.json
   const G = new Guide(D);
   let detour = null, comp = null; // exitDetour・groundTree が一度だけ作るもの（run が読み込みの途中で呼ぶので、先に置く）
   const N = (i) => D.nodes[i];

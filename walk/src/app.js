@@ -2,23 +2,25 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvvw7ct8';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvw7ct8';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvw7ct8';
-import { addTrains } from './trains.js?v=mvvw7ct8';
-import { routeSteps, stepLine } from './steps.js?v=mvvw7ct8';
-import { initMeet } from './meet.js?v=mvvw7ct8';
+import { initPhoto } from './photo.js?v=mvvwdiu7';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvwdiu7';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvwdiu7';
+import { addTrains } from './trains.js?v=mvvwdiu7';
+import { routeSteps, stepLine } from './steps.js?v=mvvwdiu7';
+import { initMeet } from './meet.js?v=mvvwdiu7';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvvw7ct8'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
-const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
+const VER = '?v=mvvwdiu7'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const PRE = window.ekisanpoPre || {}; // index.html で先に読みはじめたデータ（同じ駅のときだけ使う）
+const STATIONS = await (PRE.stations || Promise.reject()).catch(() => fetch(`data/stations.json${VER}`).then((r) => r.json()));
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
+const pre = (k, f) => (PRE.key === ST.key && PRE[k] ? PRE[k].catch(f) : f());
 const [data, mallBuf] = await Promise.all([
-  fetch(`data/${ST.key}.json${VER}`).then((r) => r.json()),
-  ST.mall ? fetch(`data/${ST.key}-mall.bin${VER}`).then((r) => r.arrayBuffer()) : null,
+  pre('data', () => fetch(`data/${ST.key}.json${VER}`).then((r) => r.json())),
+  ST.mall ? pre('mall', () => fetch(`data/${ST.key}-mall.bin${VER}`).then((r) => r.arrayBuffer())) : null,
 ]);
 const GL = data.mall ? data.mall.level : null; // 地下街をつなぐ階（マス目で道を探す階）。地下街の無い駅は null
 $('credit').textContent = '出典: ' + data.credits.join(' ／ ');
@@ -92,7 +94,16 @@ for (const d of data.dest.filter((x) => x.t === 'ogate')) {
 
 // ---------- 札（看板） ----------
 // badge: 丸の中の文字（番線など）。badges: [[文字, 色], ...] で複数並べる。arrow: 文字の前に矢印（'up' | 'down'）
-function sign(text, { bg = '#f5c400', fg = '#111', badge = null, badgeColor = null, badges = null, arrow = null, h = 0.55 } = {}) {
+const signMats = new Map(); // 同じ文字・色の札は絵（材質）を使い回す（池袋で数百枚あり、1 枚ずつ描くと開くのが遅かった）
+function sign(text, opts = {}) {
+  const k = text + '|' + JSON.stringify(opts);
+  let m = signMats.get(k);
+  if (!m) { m = signMat(text, opts); signMats.set(k, m); }
+  const s = new THREE.Sprite(m.mat);
+  s.scale.set(m.w, m.h, 1);
+  return s;
+}
+function signMat(text, { bg = '#f5c400', fg = '#111', badge = null, badgeColor = null, badges = null, arrow = null, h = 0.55 } = {}) {
   const c = document.createElement('canvas');
   const g = c.getContext('2d');
   const font = 'bold 64px system-ui, "Hiragino Sans", "Noto Sans JP", sans-serif';
@@ -127,9 +138,7 @@ function sign(text, { bg = '#f5c400', fg = '#111', badge = null, badgeColor = nu
   g.fillText(text, x, 55);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
-  const s = new THREE.Sprite(new THREE.SpriteMaterial({ map: tex, fog: true }));
-  s.scale.set((h * c.width) / c.height, h, 1);
-  return s;
+  return { mat: new THREE.SpriteMaterial({ map: tex, fog: true }), w: (h * c.width) / c.height, h };
 }
 const placed = [];
 // 札の位置が柱・壁の線から 0.8 m 以内なら、線と直角の向きに 1 m 離す（床のある側。池袋の南改札の案内所の札が PLATEAU の柱に隠れた）
@@ -152,12 +161,33 @@ function awayFromWall(x, y, z) {
   return [x, y];
 }
 // 札の上の天井の高さ（地下街の天井・JR の天井・屋根を真上に探す）。無ければ null
-let ceilMeshes = null;
+// 天井の三角形は 2 m のます目に振り分けておく（札ごとに全部の天井へ光線を当てると、札が数百枚あって開くのが遅かった）
+let ceilGrid = null;
 function ceilingAbove(x, y, z) {
-  if (!ceilMeshes) { ceilMeshes = []; scene.traverse((o) => { if (o.isMesh && ['mallCeil', 'ceiling', 'roof'].includes(o.name)) ceilMeshes.push(o); }); }
-  const rc = new THREE.Raycaster(V3(x, y, z), new THREE.Vector3(0, 1, 0), 0, 6);
-  const h = rc.intersectObjects(ceilMeshes, false)[0];
-  return h ? h.point.y : null;
+  if (!ceilGrid) {
+    ceilGrid = new Map();
+    const v = new THREE.Vector3();
+    scene.traverse((o) => {
+      if (!o.isMesh || !['mallCeil', 'ceiling', 'roof'].includes(o.name)) return;
+      o.updateMatrixWorld(true);
+      const pos = o.geometry.attributes.position, ix = o.geometry.index, n = ix ? ix.count : pos.count;
+      for (let t = 0; t < n; t += 3) {
+        const P = [0, 1, 2].map((j) => { v.fromBufferAttribute(pos, ix ? ix.getX(t + j) : t + j).applyMatrix4(o.matrixWorld); return [v.x, -v.z, v.y]; });
+        const x0 = Math.floor(Math.min(P[0][0], P[1][0], P[2][0]) / 2), x1 = Math.floor(Math.max(P[0][0], P[1][0], P[2][0]) / 2), y0 = Math.floor(Math.min(P[0][1], P[1][1], P[2][1]) / 2), y1 = Math.floor(Math.max(P[0][1], P[1][1], P[2][1]) / 2);
+        if ((x1 - x0 + 1) * (y1 - y0 + 1) > 2500) continue; // とても大きな三角形（100 m 角を超える）は見ない
+        for (let gx = x0; gx <= x1; gx++) for (let gy = y0; gy <= y1; gy++) { const k = gx * 100000 + gy; let a = ceilGrid.get(k); if (!a) ceilGrid.set(k, (a = [])); a.push(P); }
+      }
+    });
+  }
+  let best = null;
+  for (const [p, q, r] of ceilGrid.get(Math.floor(x / 2) * 100000 + Math.floor(y / 2)) || []) {
+    const d = (q[1] - r[1]) * (p[0] - r[0]) + (r[0] - q[0]) * (p[1] - r[1]); if (Math.abs(d) < 1e-9) continue;
+    const l1 = ((q[1] - r[1]) * (x - r[0]) + (r[0] - q[0]) * (y - r[1])) / d, l2 = ((r[1] - p[1]) * (x - r[0]) + (p[0] - r[0]) * (y - r[1])) / d, l3 = 1 - l1 - l2;
+    if (l1 < -1e-6 || l2 < -1e-6 || l3 < -1e-6) continue;
+    const cz = l1 * p[2] + l2 * q[2] + l3 * r[2];
+    if (cz > z && cz <= z + 6 && (best == null || cz < best)) best = cz;
+  }
+  return best;
 }
 const addSign = (s, x, y, z, near = 2.5) => { // near: 同じ札をまとめる距離
   if (placed.some((p) => Math.hypot(p[0] - x, p[1] - y) < near && Math.abs(p[2] - z) < 1 && p[3] === s.userData.key)) return;
@@ -1142,11 +1172,11 @@ const startPoint = (d) => {
   if (d.t === 'gate') for (const i of d.nodes) for (const [j] of adj[i]) { const [x, y, l] = GN[j]; if (l === d.level && phys.groundAt(x, y, LV[l].z) != null) return [x, y]; }
   return [d.x, d.y];
 };
-function startAt(d, animate = true) {
+function startAt(d, animate = true, quick = false) { // quick: 開いたときのはじめの位置。地下 1 階のマス目（作るのに 0.6 秒ほど）を待たない（はじめの改札は広いコンコースに面したもの）
   const [x, y] = startPoint(d);
   startName = d.name;
   if (animate) { jumpTo(x, y, d.level, true); return; }
-  const p = landingAt(x, y, d.level, true);
+  const p = landingAt(x, y, d.level, true, !quick);
   if (p) { [me.x, me.y, me.z] = p; me.eye = me.z + EYE; me.yaw = openYaw(...p); }
 }
 // いちばん開けている向き: 32 方向で、いちばん遠くまで見通せる向き（地下 1 階はマス目の壁ぎわでないマス、ほかの階は当たり判定で歩いてみる）
@@ -1788,11 +1818,11 @@ function watchLevel() { // 歩いて階が変わったら、地図も自分の�
 
 // 地図でタップした所へ移動（ストリートビューのように）。歩けない所なら 3 m 以内の歩ける所へ寄せる
 let jump = null;
-function landingAt(x, y, level, open = false) {
+function landingAt(x, y, level, open = false, useGrid = true) {
   const z0 = LV[level].z;
   // 地下 1 階は、マス目のいちばん大きくつながった部分のいちばん近い所へ（囲まれた小さな区画に降りて出られなくならないように）。
   // 出発地（open）は開けたマスへ
-  if (level === GL && getGrid()) {
+  if (level === GL && useGrid && getGrid()) {
     const c = open ? openCell(x, y) : snapCell(x, y, true);
     if (c >= 0) { x = grid.x0 + ((c % grid.W) + 0.5) * grid.C; y = grid.y0 + (((c / grid.W) | 0) + 0.5) * grid.C; }
   }
@@ -2090,7 +2120,7 @@ if (!replaying) {
   else { // はじめの位置も、出発地と同じ降り方で（改札口の点が通路の外にある駅で、動けない所に立っていた。渋谷の西口）
     // 改札は駅ごとに決めた広いコンコースに面したもの（data.start。東京で京葉地下丸の内口改札の脇の、エスカレーターの開口に近い狭い所に立っていた）
     const g = data.dest.find((d) => d.t === 'gate' && d.name === data.start) || data.dest.find((d) => d.t === 'gate' && /改札$/.test(d.name)) || data.dest.find((d) => d.t === 'gate');
-    if (g) { startAt(g, false); startName = null; }
+    if (g) { startAt(g, false, true); startName = null; }
   }
   if (to) setDest(to);
   if (from && to && nav.pts) { const p = nav.pts.find((t, i) => i > 0 && Math.hypot(t.x - me.x, t.y - me.y) > 3); if (p) me.yaw = Math.atan2(p.x - me.x, p.y - me.y); }
