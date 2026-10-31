@@ -229,6 +229,7 @@ body.mapMode #mini { left: 0; top: 0; right: 0; bottom: 0; width: 100vw; height:
 body.mapMode #top, body.mapMode #leftBtns, body.mapMode #guide, body.mapMode #replayBar { z-index: 2; }
 body.mapMode #credit { z-index: 2; color: #555; text-shadow: none; background: rgba(255,255,255,0.7); padding: 1px 4px; border-radius: 4px; }
 body.mapMode #view, body.mapMode #stick, body.mapMode #mBig, body.mapMode #compass { visibility: hidden; }
+body.mapMode.viewAnim #view { visibility: visible; } /* 地図へ切り替えるアニメーションのあいだ、カメラが上がる立体を見せる */
 body.mapMode .mapBtns { right: 12px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 18px); }
 body.mapMode .floorPick { left: auto; right: 12px; top: 64px; max-height: calc(100% - 300px); }
 body.mapMode #viewBtn { background: var(--accent); color: #fff; }

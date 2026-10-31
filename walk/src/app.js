@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvvvsppp';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvvsppp';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvvsppp';
-import { addTrains } from './trains.js?v=mvvvsppp';
-import { routeSteps, stepLine } from './steps.js?v=mvvvsppp';
-import { initMeet } from './meet.js?v=mvvvsppp';
+import { initPhoto } from './photo.js?v=mvvvw5p1';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvvw5p1';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvvw5p1';
+import { addTrains } from './trains.js?v=mvvvw5p1';
+import { routeSteps, stepLine } from './steps.js?v=mvvvw5p1';
+import { initMeet } from './meet.js?v=mvvvw5p1';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvvvsppp'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvvvw5p1'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -1706,13 +1706,34 @@ $('mLocate').onclick = () => {
 };
 // 地図で見る ⇄ 立体で見る（待ち合わせ案内の図と歩く立体を 1 つの画面で行き来する。利用者 2026-10-31「meet と walk を融合したい。シームレスに行き来できるように」
 // 「meet は地上以外も表示してほしい」）: 小さな地図を画面いっぱいに広げ、下に国土地理院の淡色地図を敷く。位置・向き・行き先・案内はそのまま。URL の ?view=map で地図から
-let mapMode = false;
-function setMapMode(on) {
+// 切り替えはアニメーションで（利用者 2026-10-31「地図で見る、立体で見るはアニメーションを使って切り替えてほしい」）: 右下の小さな地図が画面いっぱいに広がり（戻るときは右下へ縮み）、
+// あわせて立体のカメラが真上へ上がって見下ろす（戻るときは真上から降りてくる）。動きを減らす設定の端末ではすぐ切り替える
+let mapMode = false, viewAnim = null;
+const VIEW_MS = 650, VIEW_H = 45; // かかる時間（ms）、カメラが上がる高さ（m）
+function setMapMode(on, anim = true) {
+  if (on === mapMode) return;
+  const el = $('mini');
+  if (on && el.classList.contains('big')) $('mBig').onclick();
+  const reduce = !anim || (window.matchMedia && matchMedia('(prefers-reduced-motion: reduce)').matches);
+  const r0 = el.getBoundingClientRect();
   mapMode = on;
   document.body.classList.toggle('mapMode', on);
   $('viewBtn').textContent = on ? '立体で見る' : '地図で見る';
-  if (on && $('mini').classList.contains('big')) $('mBig').onclick();
   miniSize();
+  if (!reduce) {
+    // FLIP: 切り替えたあとの位置から、前の位置に見えるよう変形しておき、変形を外して動かす
+    const r1 = el.getBoundingClientRect();
+    el.style.transition = 'none'; el.style.transformOrigin = '0 0';
+    el.style.transform = `translate(${r0.left - r1.left}px, ${r0.top - r1.top}px) scale(${r0.width / r1.width}, ${r0.height / r1.height})`;
+    if (!on) el.style.zIndex = '1'; // 縮むあいだは上のボタンより下、立体より上
+    void el.offsetWidth;
+    el.style.transition = `transform ${VIEW_MS}ms cubic-bezier(.4,0,.2,1), border-radius ${VIEW_MS}ms`;
+    el.style.transform = '';
+    const done = () => { el.style.transition = ''; el.style.transform = ''; el.style.transformOrigin = ''; el.style.zIndex = ''; el.removeEventListener('transitionend', done); };
+    el.addEventListener('transitionend', done); setTimeout(done, VIEW_MS + 100);
+    viewAnim = { on, t0: performance.now() };
+    document.body.classList.add('viewAnim'); setTimeout(() => document.body.classList.remove('viewAnim'), VIEW_MS + 50); // 広がるあいだは立体も見せる
+  }
   const cr = $('credit'); if (cr) { cr.textContent = cr.textContent.replace(/ ／ 地図: 国土地理院（淡色地図）$/, ''); if (on) cr.textContent += ' ／ 地図: 国土地理院（淡色地図）'; }
   try { const u = new URL(location.href); if (on) u.searchParams.set('view', 'map'); else u.searchParams.delete('view'); history.replaceState(null, '', u); } catch (err) { void err; }
 }
@@ -2079,7 +2100,7 @@ if (!replaying) {
 const meetShared = { p: null }; // あいての位置（小さな地図が描く）
 const meet = await initMeet({ $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared: meetShared, view: { get map() { return mapMode; }, set: setMapMode, focus: mapFocus }, setMeetRoute: (r) => { nav.fixed = r; setDest(r); }, clearRoute: () => setDest(null) });
 groundTreeFn = meet.groundTree;
-if (new URLSearchParams(location.search).get('view') === 'map') setMapMode(true); // 地図で開く（meet/ の古いリンクもここへ来る）
+if (new URLSearchParams(location.search).get('view') === 'map') setMapMode(true, false); // 地図で開く（meet/ の古いリンクもここへ来る）
 // 空と霧: 地下は近くで霧が濃い（30〜170 m）。地上（1F より上）では遠くまで見えるように霧を 60〜600 m にし、空を明るくする
 // （利用者 2026-10-30「地上を歩いてると遠くが見えないので、恐い印象を与える」）。地上の範囲（±450 m）の外には平らな地面を敷く（空の色の穴が見えないように）
 const SKY = { in: new THREE.Color('#c3c8cc'), out: new THREE.Color('#d3dfe9'), near: [30, 60], far: [170, 600] };
@@ -2260,6 +2281,13 @@ function frame(now) {
   me.eye += (me.z + EYE - me.eye) * Math.min(1, dt * 10);
   camera.position.copy(V3(me.x, me.y, me.eye));
   camera.rotation.set(me.pitch, -me.yaw, 0);
+  if (viewAnim) { // 地図 ⇄ 立体の切り替え: u = 0 で目の高さ、1 で真上から見下ろす（地図の上を上に）
+    const k = Math.min(1, (now - viewAnim.t0) / VIEW_MS), e = k < 0.5 ? 4 * k * k * k : 1 - (-2 * k + 2) ** 3 / 2, u = viewAnim.on ? e : 1 - e;
+    const ty = mini.rot; let dy = ty - me.yaw; dy = Math.atan2(Math.sin(dy), Math.cos(dy)); // ty: 地図の上の向き（北が上なら 0、進む向きを上にしていれば自分の向き）
+    camera.position.y += u * VIEW_H;
+    camera.rotation.set(me.pitch + (-Math.PI / 2 + 0.001 - me.pitch) * u, -(me.yaw + dy * u), 0);
+    if (k >= 1) viewAnim = null;
+  }
   const fl = LV[levelOf(me.z)].name;
   if (fl !== floorShown) { $('floor').textContent = fl; floorShown = fl; }
   if (now - fareAt > 300) { // 改札の内・外（0.3 秒ごと）
@@ -2279,7 +2307,7 @@ function frame(now) {
   if (photoCity && now - photoAt > 3000) { photoAt = now; photoCity.update(); } // スマホの写真の街並み: 近くのタイルを読み足す
   drawMini();
   drawCompass();
-  if (!mapMode) renderer.render(scene, camera); // 地図で見ているあいだは立体を描かない
+  if (!mapMode || viewAnim) renderer.render(scene, camera); // 地図で見ているあいだは立体を描かない（切り替えのアニメーションの間は描く）
   requestAnimationFrame(frame);
 }
 $('loading').hidden = true;
