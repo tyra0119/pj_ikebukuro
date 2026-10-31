@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvvu0bpu';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvu0bpu';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvu0bpu';
-import { addTrains } from './trains.js?v=mvvu0bpu';
-import { routeSteps, stepLine } from './steps.js?v=mvvu0bpu';
-import { initMeet } from './meet.js?v=mvvu0bpu';
+import { initPhoto } from './photo.js?v=mvvvsppp';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvvsppp';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvvsppp';
+import { addTrains } from './trains.js?v=mvvvsppp';
+import { routeSteps, stepLine } from './steps.js?v=mvvvsppp';
+import { initMeet } from './meet.js?v=mvvvsppp';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvvu0bpu'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvvvsppp'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -1446,6 +1446,7 @@ for (const l of Object.keys(LV)) {
   paths[l] = { floor, block, wall, mall, gside, groad, gbld };
 }
 const ramps2d = data.ramps;
+let photoBtnSync = null; // 写真の街並みのボタンを、見ている階に合わせて出し入れする
 let photoCity = null; // 写真の街並み（photo.js）。1F の小さな地図に航空写真を敷く
 function miniSize() {
   const r = mcv.getBoundingClientRect();
@@ -2101,7 +2102,10 @@ if (data.mall && data.mall.layout && data.mall.layout.gfloor) {
   }
   const baseCredit = '出典: ' + data.credits.join(' ／ ');
   const photo = initPhoto({ scene, data, groundZ: LV['1'].z, stationKey: ST.key, light: touchUI, here: () => [me.x, me.y], setStatus: (t) => { if (t) toast(t); }, onCredit: (c) => { $('credit').textContent = c ? baseCredit + ' ／ ' + c : baseCredit; } });
-  const btn = $('photoBtn'); btn.hidden = false;
+  const btn = $('photoBtn');
+  // ボタンは街並みが見える階（地上の 1F より上）を見ているときだけ出す。歩くときは自分の階、地図で見るときは地図に出している階（利用者 2026-10-31）
+  photoBtnSync = () => { const l = Number(mapMode && mini.floor != null ? mini.floor : levelOf(me.z)), hide = !(l >= 1); if (btn.hidden !== hide) btn.hidden = hide; };
+  photoBtnSync();
   const show = (on) => { btn.classList.toggle('primary', on); btn.textContent = on ? '写真の街並み ✓' : '写真の街並み'; };
   // 読み込みの途中で画面が落ちた（スマホで重すぎた）ときは、次に開いたとき自動では読まない（読み込み中の印が残っていたら、ふつうの見た目で開く）
   const ls = (k, v) => { try { if (v === undefined) return localStorage.getItem(k); if (v === null) localStorage.removeItem(k); else localStorage.setItem(k, v); } catch (err) { void err; } return null; };
@@ -2271,6 +2275,7 @@ function frame(now) {
   updateBeacon(now);
   updateElev();
   updateSky(dt);
+  if (photoBtnSync) photoBtnSync();
   if (photoCity && now - photoAt > 3000) { photoAt = now; photoCity.update(); } // スマホの写真の街並み: 近くのタイルを読み足す
   drawMini();
   drawCompass();

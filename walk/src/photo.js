@@ -144,20 +144,98 @@ export function initPhoto({ scene, data, groundZ, stationKey, setStatus, onCredi
     // （駅ビルの箱の中に JR の構内が入っていて、構内を歩くと駅ビルの壁の中に入った）
     if (!st.jrUp) st.jrUp = [...(data.floors || []), ...(data.blocks || [])].filter((f) => f.l >= 1).map((f) => { const r = f.r[0]; let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity; for (let i = 0; i < r.length; i += 2) { x0 = Math.min(x0, r[i]); x1 = Math.max(x1, r[i]); y0 = Math.min(y0, r[i + 1]); y1 = Math.max(y1, r[i + 1]); } return { r: f.r, bb: [x0, y0, x1, y1] }; });
     const pip = (ring, x, y) => { let c = false; for (let i = 0, j = ring.length - 2; i < ring.length; j = i, i += 2) { const xi = ring[i], yi = ring[i + 1], xj = ring[j], yj = ring[j + 1]; if ((yi > y) !== (yj > y) && x < ((xj - xi) * (y - yi)) / (yj - yi) + xi) c = !c; } return c; };
+    const exitPts = (data.ramps || []).filter((r) => r.exit).flatMap((r) => [r.a, r.b, [(r.a[0] + r.b[0]) / 2, (r.a[1] + r.b[1]) / 2]]).concat((data.pstairs || []).filter((st) => st.hi[2] > groundZ - 2.5).map((st) => st.hi)); // 出口の階段（坂の両端と真ん中、地上のすぐ下まで上る階段の上の端）
     const inJrUp = (x, y) => st.jrUp.some((f) => x >= f.bb[0] && x <= f.bb[2] && y >= f.bb[1] && y <= f.bb[3] && f.r.some((r) => pip(r, x, y)));
     let dropped = 0;
     grp.updateMatrixWorld(true);
     for (const h of holders) h.traverse((o) => {
       if (!o.isMesh) return;
       const g = o.geometry, p = g.attributes.position, id = g.attributes._batchid || g.attributes._feature_id_0; if (!id) return;
-      const v = new THREE.Vector3(), cnt = {}, inn = {};
-      for (let k = 0; k < p.count; k++) { const b = id.getX(k); v.fromBufferAttribute(p, k).applyMatrix4(o.matrixWorld); cnt[b] = (cnt[b] || 0) + 1; if (inJrUp(v.x, -v.z)) inn[b] = (inn[b] || 0) + 1; }
-      const drop = new Set(Object.keys(cnt).filter((b) => (inn[b] || 0) >= cnt[b] * 0.2).map(Number)); if (!drop.size) return;
+      const v = new THREE.Vector3(), cnt = {}, inn = {}, bb = {};
+      for (let k = 0; k < p.count; k++) { const b = id.getX(k); v.fromBufferAttribute(p, k).applyMatrix4(o.matrixWorld); cnt[b] = (cnt[b] || 0) + 1; if (inJrUp(v.x, -v.z)) inn[b] = (inn[b] || 0) + 1; const r = bb[b] || (bb[b] = [Infinity, Infinity, -Infinity, -Infinity]); r[0] = Math.min(r[0], v.x); r[1] = Math.min(r[1], -v.z); r[2] = Math.max(r[2], v.x); r[3] = Math.max(r[3], -v.z); }
+      // 出口の階段にかぶさる小さな建物（200 m² 未満。PLATEAU では出口の上屋が閉じた箱で、階段の上にふたをし、中から見ると頭のすぐ上に底が見えた。池袋の出口 39。2026-10-31）も外す
+      const onExit = (b) => { const r = bb[b]; return (r[2] - r[0]) * (r[3] - r[1]) < 200 && exitPts.some(([x, y]) => x > r[0] - 0.5 && x < r[2] + 0.5 && y > r[1] - 0.5 && y < r[3] + 0.5); };
+      const drop = new Set(Object.keys(cnt).filter((b) => (inn[b] || 0) >= cnt[b] * 0.2 || onExit(b)).map(Number)); if (!drop.size) return;
       const ix = g.index ? Array.from(g.index.array) : Array.from({ length: p.count }, (_, i) => i), keep = [];
       for (let t = 0; t < ix.length; t += 3) { if (drop.has(id.getX(ix[t]))) continue; keep.push(ix[t], ix[t + 1], ix[t + 2]); }
       g.setIndex(keep); dropped += drop.size;
     });
     if (dropped) console.log('写真の街並み: JR の 1F・2F にかかる建物を外した', dropped);
+    // 建物の底の面（3 つの角がどれも地上の床から 0.3 m 以内）を外す。道からは見えず、出口の階段の上にかかる建物の底が、階段の中から見上げるとふたになった（池袋の出口 39。2026-10-31）
+    grp.updateMatrixWorld(true);
+    let bottoms = 0;
+    for (const h of holders) h.traverse((o) => {
+      if (!o.isMesh) return;
+      const g = o.geometry, p = g.attributes.position, v = new THREE.Vector3(), low = new Uint8Array(p.count);
+      for (let k = 0; k < p.count; k++) { v.fromBufferAttribute(p, k).applyMatrix4(o.matrixWorld); low[k] = v.y < groundZ + 0.3 ? 1 : 0; }
+      const ix = g.index ? Array.from(g.index.array) : Array.from({ length: p.count }, (_, i) => i), keep = [];
+      for (let t = 0; t < ix.length; t += 3) { if (low[ix[t]] && low[ix[t + 1]] && low[ix[t + 2]]) { bottoms++; continue; } keep.push(ix[t], ix[t + 1], ix[t + 2]); }
+      if (keep.length !== ix.length) g.setIndex(keep);
+    });
+    if (bottoms) console.log('写真の街並み: 建物の底の面を外した', bottoms);
+    // 出口の上屋（data.exitBoxes。地上のすぐ下まで上る階段のまわり）の中の、地上から 3 m までの写真の建物の面も外す（出口 39 は建物の中にあり、建物の壁が上屋の中を横切った）
+    // 出口の坂（地上へ出る階段）の長方形（上の端の 1.5 m 先まで、横は幅の半分 + 0.5 m）も同じく外す（建物の壁が出口の口をふさいだ）
+    const rampBoxes = (data.ramps || []).filter((r) => r.exit).map((r) => { const L = Math.hypot(r.b[0] - r.a[0], r.b[1] - r.a[1]) || 1, ux = (r.b[0] - r.a[0]) / L, uy = (r.b[1] - r.a[1]) / L, hw = r.w / 2 + 0.5, ex = r.b[0] + ux * 1.5, ey = r.b[1] + uy * 1.5; return [r.a[0] - uy * hw, r.a[1] + ux * hw, ex - uy * hw, ey + ux * hw, ex + uy * hw, ey - ux * hw, r.a[0] + uy * hw, r.a[1] - ux * hw]; });
+    const boxes = [...(data.exitBoxes || []), ...rampBoxes];
+    if (boxes.length) {
+      // 三角形を切る: 地上から 3 m の高さで上下に分け、下の部分から箱（凸多角形）の中を除く。写真の建物の壁の三角形は大きく、真ん中の点だけで見ると外れた。
+      // 頂点の値（位置・テクスチャの座標など）は辺の上で按分する
+      const zTop = groundZ + 3, polys = boxes.map((r) => { const P = []; for (let i = 0; i < r.length; i += 2) P.push([r[i], r[i + 1]]); let a = 0; for (let i = 0; i < P.length; i++) { const p = P[i], q = P[(i + 1) % P.length]; a += p[0] * q[1] - q[0] * p[1]; } const bb = [Math.min(...P.map((p) => p[0])), Math.min(...P.map((p) => p[1])), Math.max(...P.map((p) => p[0])), Math.max(...P.map((p) => p[1]))]; return { P, sg: a > 0 ? 1 : -1, bb }; });
+      const lerp = (p, q, t) => ({ x: p.x + (q.x - p.x) * t, y: p.y + (q.y - p.y) * t, z: p.z + (q.z - p.z) * t, a: p.a.map((v, i) => v.map((c, k) => c + (q.a[i][k] - c) * t)) });
+      const split = (poly, f) => { const inn = [], out = []; for (let i = 0; i < poly.length; i++) { const p = poly[i], q = poly[(i + 1) % poly.length], fp = f(p), fq = f(q); if (fp >= 0) inn.push(p); if (fp <= 0) out.push(p); if ((fp > 0 && fq < 0) || (fp < 0 && fq > 0)) { const m = lerp(p, q, fp / (fp - fq)); inn.push(m); out.push(m); } } return [inn, out]; };
+      let clipped = 0;
+      for (const h of holders) h.traverse((o) => {
+        if (!o.isMesh) return;
+        const g = o.geometry, pos = g.attributes.position, names = Object.keys(g.attributes), A = names.map((n) => g.attributes[n]), M = o.matrixWorld, v = new THREE.Vector3();
+        const ix = g.index ? Array.from(g.index.array) : Array.from({ length: pos.count }, (_, i) => i);
+        const vert = (k) => { v.fromBufferAttribute(pos, k).applyMatrix4(M); return { x: v.x, y: -v.z, z: v.y, a: A.map((at) => Array.from({ length: at.itemSize }, (_, c) => at.getComponent(k, c))) }; };
+        // 先に頂点の位置だけ世界の座標にして、箱にかかる三角形を探す（全部の三角形で頂点の値を作ると、読み込みが止まったように遅くなった）
+        const W = new Float32Array(pos.count * 3);
+        for (let k = 0; k < pos.count; k++) { v.fromBufferAttribute(pos, k).applyMatrix4(M); W[k * 3] = v.x; W[k * 3 + 1] = -v.z; W[k * 3 + 2] = v.y; }
+        const hitOf = (t) => {
+          const a = ix[t] * 3, b = ix[t + 1] * 3, c = ix[t + 2] * 3;
+          if (Math.min(W[a + 2], W[b + 2], W[c + 2]) >= zTop) return null;
+          const x0 = Math.min(W[a], W[b], W[c]), x1 = Math.max(W[a], W[b], W[c]), y0 = Math.min(W[a + 1], W[b + 1], W[c + 1]), y1 = Math.max(W[a + 1], W[b + 1], W[c + 1]);
+          const h = polys.filter((q) => !(x0 > q.bb[2] || x1 < q.bb[0] || y0 > q.bb[3] || y1 < q.bb[1]));
+          return h.length ? h : null;
+        };
+        const hits = []; for (let t = 0; t < ix.length; t += 3) { const h = hitOf(t); if (h) hits.push([t, h]); }
+        if (!hits.length) return;
+        const out = []; let touched = false, hi = 0;
+        for (let t = 0; t < ix.length; t += 3) {
+          const tri = [vert(ix[t]), vert(ix[t + 1]), vert(ix[t + 2])];
+          const hit = hi < hits.length && hits[hi][0] === t ? hits[hi++][1] : null;
+          if (!hit) { out.push(tri); continue; }
+          let [low, up] = split(tri, (p) => zTop - p.z); // low: zTop より下
+          const keep = up.length >= 3 ? [up] : [];
+          let pieces = low.length >= 3 ? [low] : [];
+          for (const b of hit) {
+            const next = [];
+            for (const pc of pieces) {
+              let inside = [pc];
+              for (let e = 0; e < b.P.length; e++) {
+                const p0 = b.P[e], p1 = b.P[(e + 1) % b.P.length], f = (p) => b.sg * ((p1[0] - p0[0]) * (p.y - p0[1]) - (p1[1] - p0[1]) * (p.x - p0[0]));
+                const nin = []; for (const c of inside) { const [i2, o2] = split(c, f); if (i2.length >= 3) nin.push(i2); if (o2.length >= 3) next.push(o2); } inside = nin;
+              }
+              if (inside.length) touched = true;
+            }
+            pieces = next;
+          }
+          for (const pc of [...keep, ...pieces]) for (let i = 1; i + 1 < pc.length; i++) out.push([pc[0], pc[i], pc[i + 1]]);
+        }
+        if (!touched) return;
+        clipped++;
+        const ng = new THREE.BufferGeometry(), inv = new THREE.Matrix4().copy(M).invert();
+        names.forEach((n, ai) => {
+          const at = A[ai], arr = new Float32Array(out.length * 3 * at.itemSize);
+          let w = 0; for (const tr of out) for (const p of tr) for (let c = 0; c < at.itemSize; c++) arr[w++] = p.a[ai][c];
+          ng.setAttribute(n, new THREE.BufferAttribute(arr, at.itemSize, at.normalized));
+        });
+        void inv;
+        o.geometry = ng;
+      });
+      if (clipped) console.log('写真の街並み: 出口の上屋・坂にかかる写真の建物を切った部品', clipped);
+    }
     st.busy = false;
   }
 

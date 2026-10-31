@@ -131,7 +131,7 @@ function materials() {
     mallStair: lam({ map: panelTexture('#b9b3a8', '#8c867b', 0.5), side: THREE.DoubleSide }), // 地下街の階段の蹴上げ・横の面
     mallFloor: lam({ map: tileTexture('#d6d0c6', '#c0b8aa') }),
     mallWall: lam({ map: panelTexture('#e9e3d8', '#cdc5b6', 1.2), side: THREE.DoubleSide }),
-    mallCeil: lam({ color: '#f3f2ee', emissive: '#b9b6ae', side: THREE.DoubleSide }),
+    mallCeil: lam({ color: '#f3f2ee', emissive: '#b9b6ae' }), // 下から見たときだけ見える（面は下向きにそろえる。downward）。両面だと、階段の上から見下ろしたとき、下の段の天井の上の面が白いかけらに見えた（出口 39）
     mallInst: lam({ color: '#a9a49b', side: THREE.DoubleSide }),
     mallPillar: lam({ map: panelTexture('#ece7dd', '#cdc5b6', 0.6), side: THREE.DoubleSide }), // JR の範囲の柱（PLATEAU）
     groundFloor: lam({ map: tileTexture('#cfcac0', '#b9b3a7') }), // 地上の歩道・道路（写真の街並みでは航空写真に替える）
@@ -718,6 +718,8 @@ export function buildWorld(data, mallBuf, scene) {
   const L = data.mall ? data.mall.layout : {};
   const get = (k) => (L[k] ? new Float32Array(mallBuf, L[k][0], L[k][1]) : new Float32Array(0)); // [バイトの位置, 数の個数]
   const toThree = (src) => { const o = new Float32Array(src.length); for (let i = 0; i < src.length; i += 3) { o[i] = src[i]; o[i + 1] = src[i + 2]; o[i + 2] = -src[i + 1]; } return o; };
+  // 天井の三角形を下向き（下から見て左回り）にそろえる
+  const downward = (src) => { const o = src.slice(); for (let i = 0; i < o.length; i += 9) { const nz = (o[i + 3] - o[i]) * (o[i + 7] - o[i + 1]) - (o[i + 4] - o[i + 1]) * (o[i + 6] - o[i]); if (nz > 0) for (let c = 0; c < 3; c++) { const t = o[i + 3 + c]; o[i + 3 + c] = o[i + 6 + c]; o[i + 6 + c] = t; } } return o; };
   const mf = get('floor');
   for (let i = 0; i < mf.length; i += 9) phys.addFloor([mf[i], mf[i + 1], mf[i + 2]], [mf[i + 3], mf[i + 4], mf[i + 5]], [mf[i + 6], mf[i + 7], mf[i + 8]]);
   for (const k of ['wall', 'inst', 'pillar', 'closure', 'bwall']) { const w = get(k); for (let i = 0; i < w.length; i += 9) phys.addWallTri(w.subarray(i, i + 9)); } // 閉じる面（向こうはデータの範囲外）・地上の建物の壁も当たる
@@ -731,7 +733,7 @@ export function buildWorld(data, mallBuf, scene) {
   groundMeshes[0].name = 'groundFloor'; groundMeshes[1].name = 'groundBldg'; groundMeshes[2].name = 'groundRoad';
   scene.add(...groundMeshes);
   const mallMeshes = [
-    meshOf(toThree(mf), M.mallFloor, { uv: true }), meshOf(toThree(get('wall')), M.mallWall, { uv: 'side' }), meshOf(toThree(get('ceil')), M.mallCeil),
+    meshOf(toThree(mf), M.mallFloor, { uv: true }), meshOf(toThree(get('wall')), M.mallWall, { uv: 'side' }), meshOf(toThree(downward(get('ceil'))), M.mallCeil),
     meshOf(toThree(get('inst')), M.mallInst), meshOf(toThree(get('door')), M.mallDoor),
     meshOf(toThree(get('stair')), M.mallStair, { uv: 'side' }), // 階段の蹴上げ・側面（踏み面は床に入れてある。当たり判定には使わない）
     // 閉じる面（向こうがデータの範囲外。となりの建物・デパートの地下などへの口）は明るいガラスの面に
