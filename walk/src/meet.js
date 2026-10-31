@@ -2,8 +2,8 @@
 // 同じ経路を「図と手順」（この画面のパネル）と「立体」（床の矢印・案内カード）の両方で見せる。手順を押すとその場所へ立体で飛ぶ。
 // 地上の歩道にも床があるので、出発から立体で歩ける。立体に床の無い点（地下 2 階・データの範囲外）の区間だけ図と手順で案内する。
 
-import { Guide, lvName } from './guide.js?v=mvw1p2yv';
-import { startRoom, roomId } from './room.js?v=mvw1p2yv';
+import { Guide, lvName } from './guide.js?v=mvw5cidi';
+import { startRoom, roomId } from './room.js?v=mvw5cidi';
 
 export async function initMeet(A) {
   const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared, setMeetRoute, clearRoute, view } = A; // view: 地図で見ているか・切り替え・地図をある所へ（app.js）
@@ -147,6 +147,16 @@ export async function initMeet(A) {
         if (q && gp && p.l === -1 && q.l === -1 && p.mode !== 4 && p.mode !== 5 && !(q.z > 29.6) && !(p.z > 29.6)) { // ます目の高さ（地下 1 階の 2 m 上まで）より高い点（階段の上の端など）はつながない（ます目は下の床を通る）
           const g = gp(q.x, q.y, p.x, p.y), straight = Math.hypot(p.x - q.x, p.y - q.y);
           if (g && g.length > 2 && Math.hypot(g[g.length - 1][0] - p.x, g[g.length - 1][1] - p.y) < 1.0) { let L = 0; for (let k = 1; k < g.length; k++) L += Math.hypot(g[k][0] - g[k - 1][0], g[k][1] - g[k - 1][1]); if (L < straight * 6 + 40) for (let k = 1; k < g.length - 1; k++) walkPts.push({ x: g[k][0], y: g[k][1], l: -1, lv: -1, grid: 1 }); }
+        }
+        // 地下 1 階 ↔ 地上をまたぐ所は、その線から作った出口の階段（坂。lo: 線の地下 1 階の点）の足元と上の端を通る（出口の階段は、上る高さに合う長さ・
+        // 向きに置くので、線の地上の点とずれる。利用者 2026-10-31「地下から地上へ出ると、高さが合っていなかったり…」）
+        if (q && data.ramps && ((q.l === -1 && p.l === 1) || (q.l === 1 && p.l === -1))) {
+          // 4 m 以内（近い線の出口の階段は 1 本にまとめてある）。PLATEAU の階段の上から地上への坂（top）は、PLATEAU の階段の下の端（st）で見て、段に沿って上る
+          const lo = q.l === -1 ? q : p, key = (r) => (r.top ? r.st : r.lo), rp = data.ramps.filter((r) => r.exit && key(r) && Math.hypot(key(r)[0] - lo.x, key(r)[1] - lo.y) < 4).sort((a, b) => Math.hypot(key(a)[0] - lo.x, key(a)[1] - lo.y) - Math.hypot(key(b)[0] - lo.x, key(b)[1] - lo.y))[0];
+          if (rp) {
+            const up = [...(rp.top ? [rp.st, ...(rp.path || [])].map((v) => ({ x: v[0], y: v[1], l: -1, lv: -1, ramp: 1 })) : []), { x: rp.a[0], y: rp.a[1], l: -1, lv: -1, ramp: 1 }, { x: rp.b[0], y: rp.b[1], l: 1, lv: 1, ramp: 1 }];
+            walkPts.push(...(q.l === -1 ? up : up.reverse()));
+          }
         }
         // 地上どうしの線が出口の階段（坂）の上を横切るときは、階段の口の 2 m 先の角を回る（階段室の横の壁に当たった）。回る点を足したあとの線も
         // 確かめ直す（出口の階段が 3 つ固まった所で、1 つ目を回る点が 2 つ目の口にかかった。池袋の (133,-14)）

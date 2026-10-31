@@ -570,6 +570,8 @@ export function buildWorld(data, mallBuf, scene) {
       const HC = 2.7, len0 = Math.hypot(bx - ax, by - ay), rise0 = bz - az, cz = (s) => az + (rise0 * Math.min(len0, s + 3)) / len0 + HC;
       const pt = (s, side) => P([ax + (bx - ax) * (s / len0), ay + (by - ay) * (s / len0)], side, 0);
       const sk = Math.max(0, len0 - 3);
+      // 入口の上: 地下街の天井の高さ（足元の 2.3 m 上）から階段室の屋根までふさぐ（天井と屋根のあいだから天井の上の空間が見えた）
+      { const L0 = pt(0, 1), R0 = pt(0, -1); push('side', V(L0[0], L0[1], az + 2.3), V(R0[0], R0[1], az + 2.3), V(R0[0], R0[1], cz(0) + 0.05), V(L0[0], L0[1], az + 2.3), V(R0[0], R0[1], cz(0) + 0.05), V(L0[0], L0[1], cz(0) + 0.05)); }
       for (const side of [1, -1]) {
         const p0 = pt(0, side), pk = pt(sk, side), p1 = pt(len0, side);
         push('side', V(p0[0], p0[1], az - 0.05), V(pk[0], pk[1], az - 0.05), V(pk[0], pk[1], cz(sk)), V(p0[0], p0[1], az - 0.05), V(pk[0], pk[1], cz(sk)), V(p0[0], p0[1], cz(0)));
@@ -750,6 +752,9 @@ export function buildWorld(data, mallBuf, scene) {
     meshOf(toThree(get('pillar')), M.mallPillar, { uv: 'side' }),
   ];
   ['mallFloor', 'mallWall', 'mallCeil', 'mallInst', 'mallDoor', 'mallStair', 'mallClosure', 'mallPillar'].forEach((n, i) => { mallMeshes[i].name = n; });
+  // PLATEAU の扉は描かない（当たり判定に入れず通り抜けられるのに、半透明の板が通路や階段のまわりに並んで見えた。開いた出入口として見せる。
+  // 利用者 2026-10-31「通路や階段がへんな壁だらけになってたり、半透明だらけになっている場所が多数ある」）
+  mallMeshes[4].visible = false;
   scene.add(...mallMeshes);
 
   // 天井の蛍光灯: 駅の向き（階段の向きの平均）にそろえ、3.6 m × 2.4 m ごとに細長い光る板を並べる

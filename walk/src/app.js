@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvw1p2yv';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvw1p2yv';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvw1p2yv';
-import { addTrains } from './trains.js?v=mvw1p2yv';
-import { routeSteps, stepLine } from './steps.js?v=mvw1p2yv';
-import { initMeet } from './meet.js?v=mvw1p2yv';
+import { initPhoto } from './photo.js?v=mvw5cidi';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvw5cidi';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvw5cidi';
+import { addTrains } from './trains.js?v=mvw5cidi';
+import { routeSteps, stepLine } from './steps.js?v=mvw5cidi';
+import { initMeet } from './meet.js?v=mvw5cidi';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvw1p2yv'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvw5cidi'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const PRE = window.ekisanpoPre || {}; // index.html で先に読みはじめたデータ（同じ駅のときだけ使う）
 const STATIONS = await (PRE.stations || Promise.reject()).catch(() => fetch(`data/stations.json${VER}`).then((r) => r.json()));
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
@@ -23,6 +23,9 @@ const [data, mallBuf] = await Promise.all([
   ST.mall ? pre('mall', () => fetch(`data/${ST.key}-mall.bin${VER}`).then((r) => r.arrayBuffer())) : null,
 ]);
 const GL = data.mall ? data.mall.level : null; // 地下街をつなぐ階（マス目で道を探す階）。地下街の無い駅は null
+// 地下街が地下 1 階より何 m 下まであるか（マス目の深さ）。新宿はサブナード（25 m）が地下 1 階より 8.3 m 低く、東口〜新宿三丁目の通路も 3.3 m 低い
+// （利用者 2026-10-31「新宿の地下街が出口まで行けない通路が多数ある」「案内も直す」）
+const MALL_DEEP = (data.mall && data.mall.deep) || 3.0;
 $('credit').textContent = '出典: ' + data.credits.join(' ／ ');
 $('helpCredit').textContent = '出典: ' + data.credits.join(' ／ ');
 document.title = `エキさんぽ ${data.station.replace(/^JR/, '')}`;
@@ -475,7 +478,7 @@ function findRoute(px, py, pl, d) {
 let grid = null;
 function getGrid() {
   if (grid || GL == null) return grid;
-  const C = 0.5, z0 = LV[GL].z, h = z0 + 1.0, lo = z0 - 3.0, hi = z0 + 2.0; // 地下街には地下 1 階より 2.6 m 低い所（新宿の西口側）、1.9 m 高い所（池袋の西武の地下）もある
+  const C = 0.5, z0 = LV[GL].z, h = z0 + 1.0, lo = z0 - MALL_DEEP, hi = z0 + 2.0; // 地下街には地下 1 階より 2.6 m 低い所（新宿の西口側）、1.9 m 高い所（池袋の西武の地下）もある
   let x0 = Infinity, y0 = Infinity, x1 = -Infinity, y1 = -Infinity;
   for (const t of phys.floors) {
     if (Math.min(t[2], t[5], t[8]) < lo || Math.max(t[2], t[5], t[8]) > hi) continue;
@@ -676,6 +679,19 @@ function gridPath(ax, ay, bx, by) {
   return out;
 }
 setTimeout(() => getGrid(), 1500); // 最初の案内で待たないように、読み込みのあとで作っておく
+// いる階: 地下街のマス目のいちばん大きくつながった部分の上（マスの床から 0.8 m 以内）なら地下 1 階。高さだけで見ると、新宿のサブナード（25 m）は
+// 地下 2 階（27.5 m）に近く、案内が地下 1 階の道として扱えなかった（2026-10-31）。マス目を作る前は高さで見る
+function levelAt(x, y, z) {
+  const l = levelOf(z);
+  if (GL == null || l === GL || !grid || z > LV[GL].z) return l;
+  const { C, x0, y0, W, H, ok, zc, comp, main } = grid, ci = Math.floor((x - x0) / C), cj = Math.floor((y - y0) / C);
+  for (let dj = -1; dj <= 1; dj++) for (let di = -1; di <= 1; di++) { // 壁ぎわ（ふさいだマス）に立っていてもよいよう、となりのマスも見る
+    const i = ci + di, j = cj + dj; if (i < 0 || j < 0 || i >= W || j >= H) continue;
+    const c = j * W + i; if (ok[c] && comp[c] === main && Math.abs(zc[c] - z) < 0.8) return GL;
+  }
+  return l;
+}
+const myLevel = () => levelAt(me.x, me.y, me.z);
 
 // ---------- 改札の内と外 ----------
 // 経路網の点のうち、ホームの乗車位置から改札（経路の種類 6・7）を通らずにたどれる点が改札内
@@ -1094,7 +1110,7 @@ function setDest(d) {
   recalc();
 }
 function recalc() {
-  const pl = levelOf(me.z);
+  const pl = myLevel();
   nav.pts = nav.fixed ? nav.fixed.pts : findRoute(me.x, me.y, pl, nav.dest);
   nav.steps = nav.pts && nav.pts.length > 1 ? routeSteps(nav.pts, stepHelp, { dest: nav.dest.name }) : null;
   if (!nav.pts) { $('gDist').textContent = 'ここからの道が見つかりません'; $('gHint').textContent = 'データの上で通路がつながっていません'; }
@@ -1104,7 +1120,7 @@ function recalc() {
 }
 // 道筋の上で、いまいる所に近い位置と、そこから先の長さ
 function progress() {
-  const pts = nav.pts, pl = levelOf(me.z);
+  const pts = nav.pts, pl = myLevel();
   let best = { d: Infinity, i: 1, t: 0 };
   for (let i = 1; i < pts.length; i++) {
     const a = pts[i - 1], b = pts[i];
@@ -1120,7 +1136,7 @@ function updateGuide() {
   if (!nav.dest) return;
   if (!nav.pts) { if (performance.now() - nav.lastCalc > 1500) recalc(); return; } // 道が無いときは、歩いてつながった所へ来たら見つかる
   const now = performance.now();
-  const pl = levelOf(me.z);
+  const pl = myLevel();
   const pr = progress();
   if (!nav.fixed && now - nav.lastCalc > 1000 && (pr.d > 5 || nav.at.l !== pl || Math.hypot(me.x - nav.at.x, me.y - nav.at.y) > 25)) { recalc(); return updateGuide(); }
   const pts = nav.pts;
@@ -1236,7 +1252,7 @@ function openDest(mode = destMode) {
   renderRows();
   const list = $('destList');
   list.innerHTML = '';
-  const pl = levelOf(me.z);
+  const pl = myLevel();
   const q = $('destFilter').value.trim();
   const add = (title, items) => {
     items = items.filter(([d]) => !d.unreach); // マス目でつながらない地下街の場所は出さない
@@ -1364,7 +1380,7 @@ function standToSee(d) {
 const hereWords = (x, y, l) => { const lm = stepHelp.landmarkAt(x, y, l, 15); return `${lm ? `${lm}のそば・` : ''}${LV[l].name}・${fareSide(x, y, l) === 'in' ? '改札内' : '改札外'}`; };
 $('lostHere').onclick = async () => {
   $('lostPanel').hidden = true;
-  const l = levelOf(me.z), deg = Math.round(((me.yaw * 180) / Math.PI + 360) % 360);
+  const l = myLevel(), deg = Math.round(((me.yaw * 180) / Math.PI + 360) % 360);
   const url = `${location.origin}${location.pathname}?st=${ST.key}#here=${me.x.toFixed(1)},${me.y.toFixed(1)},${l},${deg}`;
   const text = `${data.station}駅で、ここにいます（${hereWords(me.x, me.y, l)}）。開くと場所と、そこまでの道が分かります。`;
   if (navigator.share) { try { await navigator.share({ title: 'エキさんぽ: ここにいます', text, url }); return; } catch { /* 取り消し */ } }
@@ -1424,7 +1440,7 @@ function toast(msg) {
 // ---------- エレベーター ----------
 let elevHere = null;
 function updateElev() {
-  const pl = levelOf(me.z);
+  const pl = myLevel();
   const e = data.elevs.find((v) => v.l === pl && Math.hypot(v.x - me.x, v.y - me.y) < 1.4 && v.pair.length);
   if (e === elevHere) return;
   elevHere = e;
@@ -1466,7 +1482,7 @@ for (const l of Object.keys(LV)) {
   for (const w of data.walls) if (String(w[4]) === l) { const P = wall.p(); P.moveTo(w[0], w[1]); P.lineTo(w[2], w[3]); }
   if (GL != null && Number(l) === GL) {
     const L = data.mall.layout.floor, f = new Float32Array(mallBuf, L[0], L[1]);
-    for (let i = 0; i < f.length; i += 9) if (Math.abs(f[i + 2] - LV[l].z) < 2.5) tri(mall, f, i);
+    for (let i = 0; i < f.length; i += 9) if (f[i + 2] - LV[l].z < 2.5 && LV[l].z - f[i + 2] < Math.max(2.5, MALL_DEEP)) tri(mall, f, i); // 深い地下街（新宿のサブナード）も地下 1 階に描く
   }
   // 地上（1F）の街並み: 歩道・道路（地下街のファイルの gfloor。道路は歩道より低い）と建物の輪郭（gbld）
   const gside = chunks(), groad = chunks(), gbld = chunks();
@@ -1516,7 +1532,7 @@ function drawMini() {
   mg.setTransform(dpr, 0, 0, dpr, 0, 0);
   mg.fillStyle = '#e9e6df';
   mg.fillRect(0, 0, W, H);
-  const cur = String(levelOf(me.z));
+  const cur = String(myLevel());
   const pl = mini.floor ?? cur;
   const P = paths[pl];
   mg.setTransform(dpr * k * c, -dpr * k * s, -dpr * k * s, -dpr * k * c, dpr * (W / 2 - k * (c * mini.cx - s * mini.cy)), dpr * (H / 2 + k * (s * mini.cx + c * mini.cy)));
@@ -1705,7 +1721,7 @@ function makePin(x, y, l, name) {
 // 地図の上の小さな札: 行き先にする・ここへ移動。d が無いときは地図で選んだ場所（歩ける所に寄せる）
 let miniPopAt = null;
 function openMiniPop(sx, sy, d) {
-  const l = Number(mini.floor ?? levelOf(me.z));
+  const l = Number(mini.floor ?? myLevel());
   let target = d;
   if (!target) {
     const to = landingAt(...S2W(sx, sy), l);
@@ -1771,7 +1787,7 @@ function setMapMode(on, anim = true) {
 }
 $('viewBtn').onclick = () => setMapMode(!mapMode);
 // 地図のある場所・階へ（待ち合わせ案内の手順を押したとき）
-function mapFocus(x, y, l) { mini.follow = false; mini.head = false; mini.cx = x; mini.cy = y; mini.floor = String(l) === String(levelOf(me.z)) ? null : String(l); if (mini.s < 2) mini.s = 2; }
+function mapFocus(x, y, l) { mini.follow = false; mini.head = false; mini.cx = x; mini.cy = y; mini.floor = String(l) === String(myLevel()) ? null : String(l); if (mini.s < 2) mini.s = 2; }
 // 下地: 国土地理院の淡色地図のタイルを、地図の向き・縮尺に合わせて局所平面の上に並べる（地下・2F は薄く。地上は立体の歩道・道路・建物を少し透かして重ねる）
 const baseTiles = new Map();
 function drawBase(W, H, pl) {
@@ -1808,13 +1824,13 @@ const floorBtns = Object.keys(LV).sort((p, q) => q - p).map((l) => {
   const b = document.createElement('button');
   b.type = 'button'; b.textContent = LV[l].name; b.dataset.l = l;
   b.setAttribute('aria-label', `${LV[l].name} の地図`);
-  b.onclick = () => { mini.floor = l === String(levelOf(me.z)) ? null : l; };
+  b.onclick = () => { mini.floor = l === String(myLevel()) ? null : l; };
   $('floorPick').append(b);
   return b;
 });
-let lastLevel = levelOf(me.z);
+let lastLevel = myLevel();
 function watchLevel() { // 歩いて階が変わったら、地図も自分の階に戻す
-  const l = levelOf(me.z);
+  const l = myLevel();
   if (l !== lastLevel) { lastLevel = l; if (mini.follow) mini.floor = null; }
 }
 
@@ -1828,7 +1844,7 @@ function landingAt(x, y, level, open = false, useGrid = true) {
     const c = open ? openCell(x, y) : snapCell(x, y, true);
     if (c >= 0) { x = grid.x0 + ((c % grid.W) + 0.5) * grid.C; y = grid.y0 + (((c / grid.W) | 0) + 0.5) * grid.C; }
   }
-  let lo = z0 - (level === GL ? 3.0 : 1.5), hi = z0 + (level === GL ? 2.5 : 0.6); // 地下 1 階は地下街の低い所（新宿の西口側 -2.6 m）も
+  let lo = z0 - (level === GL ? MALL_DEEP : 1.5), hi = z0 + (level === GL ? 2.5 : 0.6); // 地下 1 階は地下街の低い所（新宿の西口側 -2.6 m、サブナード -8.3 m）も
   const pick = (px, py) => {
     const zs = phys.surfacesAt(px, py).filter((z) => z > lo && z < hi);
     if (!zs.length) return null;
@@ -1870,7 +1886,7 @@ function updateJump(dt) {
   me.x = fx + (tx - fx) * e; me.y = fy + (ty - fy) * e; me.z = fz + (tz - fz) * e;
   if (jump.yaw != null) { const d = Math.atan2(Math.sin(jump.yaw - jump.yaw0), Math.cos(jump.yaw - jump.yaw0)); me.yaw = jump.yaw0 + d * Math.min(1, u * 2); }
   if (u >= 1) {
-    const msg = jump.msg || (levelOf(me.z) !== levelOf(fz) ? `${LV[levelOf(me.z)].name} に移動しました` : ''), after = jump.after;
+    const msg = jump.msg || (myLevel() !== levelOf(fz) ? `${LV[myLevel()].name} に移動しました` : ''), after = jump.after;
     jump = null;
     mini.floor = null;
     mini.follow = true;
@@ -2158,7 +2174,7 @@ if (data.mall && data.mall.layout && data.mall.layout.gfloor) {
   const photo = initPhoto({ scene, data, groundZ: LV['1'].z, stationKey: ST.key, light: touchUI, here: () => [me.x, me.y], setStatus: (t) => { if (t) toast(t); }, onCredit: (c) => { $('credit').textContent = c ? baseCredit + ' ／ ' + c : baseCredit; } });
   const btn = $('photoBtn');
   // ボタンは街並みが見える階（地上の 1F より上）を見ているときだけ出す。歩くときは自分の階、地図で見るときは地図に出している階（利用者 2026-10-31）
-  photoBtnSync = () => { const l = Number(mapMode && mini.floor != null ? mini.floor : levelOf(me.z)), hide = !(l >= 1); if (btn.hidden !== hide) btn.hidden = hide; };
+  photoBtnSync = () => { const l = Number(mapMode && mini.floor != null ? mini.floor : myLevel()), hide = !(l >= 1); if (btn.hidden !== hide) btn.hidden = hide; };
   photoBtnSync();
   const show = (on) => { btn.classList.toggle('primary', on); btn.textContent = on ? '写真の街並み ✓' : '写真の街並み'; };
   // 読み込みの途中で画面が落ちた（スマホで重すぎた）ときは、次に開いたとき自動では読まない（読み込み中の印が残っていたら、ふつうの見た目で開く）
@@ -2323,11 +2339,11 @@ function frame(now) {
     camera.rotation.set(me.pitch + (-Math.PI / 2 + 0.001 - me.pitch) * u, -(me.yaw + dy * u), 0);
     if (k >= 1) viewAnim = null;
   }
-  const fl = LV[levelOf(me.z)].name;
+  const fl = LV[myLevel()].name;
   if (fl !== floorShown) { $('floor').textContent = fl; floorShown = fl; }
   if (now - fareAt > 300) { // 改札の内・外（0.3 秒ごと）
     fareAt = now;
-    const side = fareSide(me.x, me.y, levelOf(me.z));
+    const side = fareSide(me.x, me.y, myLevel());
     if (side !== fareShown) { fareShown = side; $('fare').textContent = side === 'in' ? '改札内' : '改札外'; $('fare').className = `pill fare ${side}`; }
   }
   trains.update(dt);
