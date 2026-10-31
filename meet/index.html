@@ -61,9 +61,13 @@
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script type="module">
-import { Guide, lvName } from './guide.js?v=mvvo8gvf';
-const DATA = ['../data/meet.json?v=mvvo8gvf', '../data/meet.json?v=mvvo8gvf'];
-const ORIGIN = { lat: 35.7295, lon: 139.7109 };
+import { Guide, lvName } from './guide.js?v=mvvp5zgw';
+// 駅は ?st=<駅>（無ければ池袋）。池袋は data/meet.json・../out/meet.json、ほかの駅は data/<駅>/meet.json・../out/<駅>/meet.json
+const STATIONS = { ikebukuro: { name: '池袋', origin: { lat: 35.7295, lon: 139.7109 } }, tokyo: { name: '東京', origin: { lat: 35.6806, lon: 139.7664 } } };
+const KEY = STATIONS[new URLSearchParams(location.search).get('st')] ? new URLSearchParams(location.search).get('st') : 'ikebukuro';
+const DATA = ['../data/meet.json?v=mvvp5zgw'].map((f) => (KEY === 'ikebukuro' ? f : f.replace('meet.json', `${KEY}/meet.json`)));
+const ORIGIN = STATIONS[KEY].origin;
+document.title = `${STATIONS[KEY].name} 待ち合わせ案内`; document.querySelector('h1').textContent = document.title;
 const a = 6378137, e2 = 0.00669438002290, phi = ORIGIN.lat * Math.PI / 180, w = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
 const KX = (Math.PI / 180) * (a / w) * Math.cos(phi), KY = (Math.PI / 180) * ((a * (1 - e2)) / w ** 3);
 const LL = (x, y) => [ORIGIN.lat + y / KY, ORIGIN.lon + x / KX];
@@ -113,7 +117,7 @@ function renderResult() {
   if (ex.length) h += `<h2>待ち合わせ場所に近い出口</h2><div class="exits">${ex.map((x) => `<button class="s" data-exit="exit:${x.e.name}">${x.e.name}（約${Math.max(1, Math.round(x.d / 60))}分）</button>`).join('')}</div>`;
   const u = new URL(location.href); u.searchParams.set('from', r.from.id); u.searchParams.set('to', r.to.id); u.searchParams.set('pr', pr);
   h += `<h2>あいてに送る</h2><div class="share">${u.href}</div><div class="row" style="margin-top:4px"><button class="s" id="copy">リンクをコピー</button><button class="s" id="copyText">案内文をコピー</button></div>`;
-  h += `<h2>立体で歩く</h2><div class="small"><a href="../walk/?st=ikebukuro&mfrom=${encodeURIComponent(r.from.id)}&mto=${encodeURIComponent(r.to.id)}&pr=${pr}" target="_blank" rel="noopener">同じ道を人の目線で歩く（歩く画面。地上の区間は図で、駅・地下街に入ってから立体）</a></div>`;
+  h += `<h2>立体で歩く</h2><div class="small"><a href="../walk/?st=${KEY}&mfrom=${encodeURIComponent(r.from.id)}&mto=${encodeURIComponent(r.to.id)}&pr=${pr}" target="_blank" rel="noopener">同じ道を人の目線で歩く（歩く画面。地上の区間は図で、駅・地下街に入ってから立体）</a></div>`;
   $('result').innerHTML = h;
   $('result').querySelectorAll('li').forEach((li) => (li.onclick = () => selectStep(+li.dataset.i)));
   $('result').querySelectorAll('[data-exit]').forEach((b) => (b.onclick = () => { $('from').value = b.dataset.exit; run(); }));
@@ -147,7 +151,7 @@ function selectStep(i) {
 }
 function renderLv() {
   const el = $('lv'); el.innerHTML = '';
-  for (const [lv, name] of [[1, '2F'], [0, '地上'], [-1, 'B1'], [-2, 'B2'], ['all', '全部']]) { const b = document.createElement('button'); b.textContent = name; b.className = curLevel === lv ? 'on' : ''; b.onclick = () => { curLevel = lv; renderLv(); drawRoute(route); drawSpots(); }; el.appendChild(b); }
+  for (const [lv, name] of [[1, '2F'], [0, '地上'], ...[-1, -2, -3, -4, -5].filter((l) => l >= -2 || D.nodes.some((n) => n[2] === l)).map((l) => [l, `B${-l}`]), ['all', '全部']]) { const b = document.createElement('button'); b.textContent = name; b.className = curLevel === lv ? 'on' : ''; b.onclick = () => { curLevel = lv; renderLv(); drawRoute(route); drawSpots(); }; el.appendChild(b); }
 }
 function drawSpots() {
   spotLayer.clearLayers();

@@ -31,8 +31,9 @@
 <div id="side">
   <h1>池袋 4 データの重ね合わせ</h1>
   <div class="stats" id="stats">読み込み中…</div>
-  <p><a href="walk/?st=ikebukuro" target="_blank" rel="noopener"><b>歩く（立体）</b></a> … まとめた床・壁・坂を人の目線で歩く（Ekisanpo の仕組み）</p>
-  <p><a href="meet/" target="_blank" rel="noopener"><b>待ち合わせ案内</b></a> … まとめた経路網で、地下の待ち合わせ場所への道順を案内する</p>
+  <p>駅: <a data-stsel="ikebukuro" href="?st=ikebukuro">池袋</a> ・ <a data-stsel="tokyo" href="?st=tokyo">東京</a></p>
+  <p><a data-st href="walk/?st=ikebukuro" target="_blank" rel="noopener"><b>歩く（立体）</b></a> … まとめた床・壁・坂を人の目線で歩く（Ekisanpo の仕組み）</p>
+  <p><a data-meet href="meet/" target="_blank" rel="noopener"><b>待ち合わせ案内</b></a> … まとめた経路網で、地下の待ち合わせ場所への道順を案内する</p>
   <h2>階</h2>
   <div class="levels" id="levels"></div>
   <h2>表示するもの</h2>
@@ -45,7 +46,15 @@
 </div>
 <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
 <script>
-const ORIGIN = { lat: 35.7295, lon: 139.7109 };
+// 駅は ?st=<駅>（無ければ池袋）。池袋は data/merged.json・../out/merged.json、ほかの駅は data/<駅>/・../out/<駅>/
+const STATIONS = { ikebukuro: { name: '池袋', origin: { lat: 35.7295, lon: 139.7109 } }, tokyo: { name: '東京', origin: { lat: 35.6806, lon: 139.7664 } } };
+const KEY = STATIONS[new URLSearchParams(location.search).get('st')] ? new URLSearchParams(location.search).get('st') : 'ikebukuro';
+const SUB = KEY === 'ikebukuro' ? '' : `${KEY}/`;
+const ORIGIN = STATIONS[KEY].origin;
+document.title = `${STATIONS[KEY].name} 重ね合わせ確認`; document.querySelector('h1').textContent = `${STATIONS[KEY].name} 4 データの重ね合わせ`;
+for (const el of document.querySelectorAll('a[data-st]')) el.href = el.getAttribute('href').replace('st=ikebukuro', `st=${KEY}`);
+for (const el of document.querySelectorAll('a[data-meet]')) el.href = `${el.getAttribute('href')}?st=${KEY}`;
+for (const el of document.querySelectorAll('a[data-stsel]')) { el.classList.toggle('cur', el.dataset.stsel === KEY); }
 const a = 6378137, e2 = 0.00669438002290, phi = ORIGIN.lat * Math.PI / 180, w = Math.sqrt(1 - e2 * Math.sin(phi) ** 2);
 const KX = (Math.PI / 180) * (a / w) * Math.cos(phi), KY = (Math.PI / 180) * ((a * (1 - e2)) / w ** 3);
 const LL = (x, y) => [ORIGIN.lat + y / KY, ORIGIN.lon + x / KX];
@@ -184,7 +193,7 @@ function renderLayers() {
 }
 function renderLevels() {
   const el = document.getElementById('levels'); el.innerHTML = '';
-  for (const [lv, name] of [[1, '2F'], [0, '地上・1F'], [-1, '地下 1 階'], [-2, '地下 2 階'], [-3, '地下 3 階'], [-4, '地下 4 階'], ['all', '全部']]) {
+  for (const [lv, name] of [[1, '2F'], [0, '地上・1F'], [-1, '地下 1 階'], [-2, '地下 2 階'], [-3, '地下 3 階'], [-4, '地下 4 階'], [-5, '地下 5 階'], ['all', '全部']].filter(([lv]) => lv === 'all' || lv >= -2 || (D && D.nodes.some((n) => n.level === lv)))) { // 東京は地下 5 階まで
     const b = document.createElement('button'); b.textContent = name; b.className = curLevel === lv ? 'on' : '';
     b.onclick = () => { curLevel = lv; renderLevels(); rebuild(); };
     el.appendChild(b);
@@ -218,7 +227,7 @@ function renderIssues() {
   }
 }
 
-const DATA = ['data/merged.json?v=mvvo8gvf'];
+const DATA = [`data/${SUB}merged.json?v=mvvp5zgw`];
 const load = (i) => fetch(DATA[i]).then((r) => { if (!r.ok) throw new Error(r.status); return r.json(); }).catch((e) => (i + 1 < DATA.length ? load(i + 1) : Promise.reject(e)));
 load(0).then((d) => {
   D = d;
@@ -232,7 +241,7 @@ load(0).then((d) => {
     `接続線 ${s.connectors}・まとまり ${s.components}（本体 ${(100 * s.mainComponent / s.nodesUsed).toFixed(1)}%）`,
     s.made ? `OSM の線から作った床: ${s.made.madeArea}、床の無い所を通る標本 ${(100 * s.made.offBefore / s.made.n).toFixed(1)}% → ${(100 * s.made.offAfter / s.made.n).toFixed(1)}%` : '',
     `床の穴（2 m² 以上）${s.bigHoles}・うち経路が通る ${s.holesOnPath}、天井の無い床 ${s.noCeil} ます、JR の中の PLATEAU の壁 ${s.wallInJr} 本`,
-    `<a href="../out/report.md" target="_blank">点検結果（report.md）</a>`,
+    `<a href="data/${SUB}report.md" target="_blank">点検結果（report.md）</a>`,
   ].join('<br>');
   renderLevels(); renderLayers(); rebuild();
 });

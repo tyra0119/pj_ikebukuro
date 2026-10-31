@@ -2,13 +2,13 @@
 // 同じ経路を「図と手順」（この画面のパネル）と「立体」（床の矢印・案内カード）の両方で見せる。手順を押すとその場所へ立体で飛ぶ。
 // 地上の歩道にも床があるので、出発から立体で歩ける。立体に床の無い点（地下 2 階・データの範囲外）の区間だけ図と手順で案内する。
 
-import { Guide, lvName } from './guide.js?v=mvvo8gvf';
-import { startRoom, roomId } from './room.js?v=mvvo8gvf';
+import { Guide, lvName } from './guide.js?v=mvvp5zgw';
+import { startRoom, roomId } from './room.js?v=mvvp5zgw';
 
 export async function initMeet(A) {
   const { $, VER, data, LV, me, nav, phys, toast, jumpTo, landingAt, levelOf, scene, THREE, V3, floorNear, shared, setMeetRoute, clearRoute } = A;
   let D;
-  try { D = await fetch(`data/meet.json${VER}`).then((r) => r.json()); } catch { return; }
+  try { D = await fetch(`data/${data.key === 'ikebukuro' ? 'meet' : `meet-${data.key}`}.json${VER}`).then((r) => r.json()); } catch { return; } // 池袋は meet.json、ほかの駅は meet-<駅>.json
   const G = new Guide(D);
   let detour = null, comp = null; // exitDetour・groundTree が一度だけ作るもの（run が読み込みの途中で呼ぶので、先に置く）
   const N = (i) => D.nodes[i];
@@ -104,7 +104,7 @@ export async function initMeet(A) {
     if (!cur) return;
     if (!room) { startShare('a', roomId()); const u = new URL(location.href); u.searchParams.set('room', room.id); u.searchParams.set('role', 'a'); history.replaceState(null, '', u); }
     const url = shareURL();
-    if (navigator.share) { try { await navigator.share({ title: '池袋 待ち合わせ案内', text: `待ち合わせ場所は「${cur.to.name}」。開いて出発を選ぶと道順が出て、お互いの位置と進み具合が見えます`, url }); return; } catch { /* 取り消し */ } }
+    if (navigator.share) { try { await navigator.share({ title: `${(D.name || data.station.replace(/^JR/, ''))} 待ち合わせ案内`, text: `待ち合わせ場所は「${cur.to.name}」。開いて出発を選ぶと道順が出て、お互いの位置と進み具合が見えます`, url }); return; } catch { /* 取り消し */ } }
     try { await navigator.clipboard.writeText(url); toast('リンクをコピーしました'); } catch { toast(url); }
   };
   const shareURL = () => { const u = new URL(location.href); u.hash = ''; u.searchParams.delete('from'); u.searchParams.delete('to'); u.searchParams.set('mto', cur.to.id); u.searchParams.set('pr', cur.pr); if (room) { u.searchParams.delete('mfrom'); u.searchParams.set('room', room.id); u.searchParams.set('role', room.role === 'a' ? 'b' : 'a'); } else u.searchParams.set('mfrom', cur.from.id); return u.href; }; // あいてへのリンク: 待ち合わせ場所と部屋だけ（出発はあいてが選ぶ）。部屋が無いときは自分の案内そのもの
