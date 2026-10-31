@@ -212,7 +212,16 @@ export class Physics {
     this.wg.add(i, Math.min(t[0], t[3], t[6]), Math.min(t[1], t[4], t[7]), Math.max(t[0], t[3], t[6]), Math.max(t[1], t[4], t[7]));
   }
   // (x, y) の真下で、いまの足の高さ z から上り下りできるいちばん高い床。無ければ null
+  // 足元の床の高さ。真下に床が無ければ 8 cm まわりも見る（床の三角形のあいだの細い切れ目。新宿の東口の地下 (108,-73) で 2 枚の床のあいだの斜めの
+  // 数 cm の切れ目を横切れず止まった。すき間を埋める床（build.mjs）は 0.5 m のます目なので、ますより細い切れ目は残る。2026-10-31）
   groundAt(x, y, z) {
+    const g = this.groundAt0(x, y, z);
+    if (g != null) return g;
+    let best = null;
+    for (const [dx, dy] of [[0.08, 0], [-0.08, 0], [0, 0.08], [0, -0.08]]) { const h = this.groundAt0(x + dx, y + dy, z); if (h != null && (best == null || h > best)) best = h; }
+    return best;
+  }
+  groundAt0(x, y, z) {
     let best = null;
     for (const i of this.fg.near(x, y)) {
       const [ax, ay, az, bx, by, bz, cx, cy, cz] = this.floors[i];
