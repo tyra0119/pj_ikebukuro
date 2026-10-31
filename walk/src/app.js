@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvvnu3fz';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvnu3fz';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvnu3fz';
-import { addTrains } from './trains.js?v=mvvnu3fz';
-import { routeSteps, stepLine } from './steps.js?v=mvvnu3fz';
-import { initMeet } from './meet.js?v=mvvnu3fz';
+import { initPhoto } from './photo.js?v=mvvo8gvf';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvo8gvf';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvo8gvf';
+import { addTrains } from './trains.js?v=mvvo8gvf';
+import { routeSteps, stepLine } from './steps.js?v=mvvo8gvf';
+import { initMeet } from './meet.js?v=mvvo8gvf';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvvnu3fz'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvvo8gvf'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -192,7 +192,7 @@ for (const d of data.dest) {
 // 近い出口は「出口 41・42」とまとめる）。番号の無い階段は「地下通路」（利用者 2026-10-30「地上に出口札表示できる？」）
 const gExitLabels = []; // 小さな地図の 1F に描く出口の番号 [x, y, 文字]
 if (LV['1']) {
-  const exitRamps = data.ramps.filter((r) => r.exit && r.lb === 1), names = exitRamps.map(() => []);
+  const exitRamps = data.ramps.filter((r) => r.exit && r.lb === 1 && !r.low), names = exitRamps.map(() => []); // low（地上のすぐ下まで上る階段に足した短い坂）は札を立てない
   for (const d of data.dest) {
     if (d.t !== 'exit') continue;
     let bi = -1, bd = 20;
