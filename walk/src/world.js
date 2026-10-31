@@ -787,7 +787,11 @@ export function buildWorld(data, mallBuf, scene) {
     if (!fz.length) return;
     const f0 = Math.min(...fz);
     const cz = mallCeilZ(x, y).filter((z) => z > f0 + 1.8 && z < f0 + 6);
-    if (cz.length) lights.push([x, y, Math.min(...cz) - 0.03]);
+    if (!cz.length) return;
+    // 階段の上（床の高さがまちまち）と、天井が平らでない所（傾いた天井・天井のふち）には付けない（明かりの板が宙に浮いて見えた。池袋の出口 39。2026-10-31）
+    if (Math.max(...fz) - f0 > 0.3) return;
+    const c0 = Math.min(...cz), flat = [[0.6, 0], [-0.6, 0], [0, 0.6], [0, -0.6]].every(([dx, dy]) => mallCeilZ(x + dx, y + dy).some((z) => Math.abs(z - c0) < 0.1));
+    if (flat) lights.push([x, y, c0 - 0.03]);
   });
   const lamp = new THREE.InstancedMesh(new THREE.BoxGeometry(1.25, 0.04, 0.16), new THREE.MeshBasicMaterial({ color: '#ffffff' }), lights.length);
   const lq = new THREE.Quaternion().setFromAxisAngle(new THREE.Vector3(0, 1, 0), axis), lm = new THREE.Matrix4(), ls = new THREE.Vector3(1, 1, 1);
