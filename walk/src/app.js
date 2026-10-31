@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvv1hrun';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvv1hrun';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvv1hrun';
-import { addTrains } from './trains.js?v=mvv1hrun';
-import { routeSteps, stepLine } from './steps.js?v=mvv1hrun';
-import { initMeet } from './meet.js?v=mvv1hrun';
+import { initPhoto } from './photo.js?v=mvvnu3fz';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvnu3fz';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvnu3fz';
+import { addTrains } from './trains.js?v=mvvnu3fz';
+import { routeSteps, stepLine } from './steps.js?v=mvvnu3fz';
+import { initMeet } from './meet.js?v=mvvnu3fz';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvv1hrun'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvvnu3fz'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const STATIONS = await fetch(`data/stations.json${VER}`).then((r) => r.json());
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
 const [data, mallBuf] = await Promise.all([
@@ -413,16 +413,17 @@ function findRoute(px, py, pl, d) {
     const leg = s ? gt.path(s[2]).map(([x, y, l]) => P(x, y, l)) : [];
     return [P(px, py, pl), ...leg, ...chain.map(({ v, mode }) => P(GN[v][0], GN[v][1], GN[v][2], mode))];
   };
-  if (!d.nodes) { // 地下街の行き先（経路網の外）
-    if (pl === B1) return gridLeg(px, py, d.x, d.y) || [P(px, py, pl), P(d.x, d.y, B1)];
+  if (!d.nodes) { // 地下街の行き先（経路網の外）。地上へ出る出口は、出口の階段の足元（foot。前処理で決めた所）まで
+    const [dx, dy] = d.foot || [d.x, d.y];
+    if (pl === B1) return gridLeg(px, py, dx, dy) || [P(px, py, pl), P(dx, dy, B1)];
     // ほかの階からは、経路網で行き先に近い地下 1 階の点まで行き、そこからマス目
     // 地下街の行き先は改札の外なので、改札の外の点を目指す（地図で選んだ場所は、その場所と同じ側）
     const want = d.t === 'pin' ? fareSide(d.x, d.y, B1) : 'out';
-    const near = GN.map((g, i) => [i, g]).filter(([i, g]) => g[2] === B1 && nodeSide(i) === want).sort((a, b) => Math.hypot(a[1][0] - d.x, a[1][1] - d.y) - Math.hypot(b[1][0] - d.x, b[1][1] - d.y)).slice(0, 3).map(([i]) => i);
+    const near = GN.map((g, i) => [i, g]).filter(([i, g]) => g[2] === B1 && nodeSide(i) === want).sort((a, b) => Math.hypot(a[1][0] - dx, a[1][1] - dy) - Math.hypot(b[1][0] - dx, b[1][1] - dy)).slice(0, 3).map(([i]) => i);
     const chain = graphChain(px, py, pl, new Set(near), seeds);
     if (!chain) return null;
-    const pts = fromChain(chain), last = pts[pts.length - 1], leg = gridLeg(last.x, last.y, d.x, d.y);
-    return leg ? [...pts, ...leg.slice(1)] : [...pts, P(d.x, d.y, B1)];
+    const pts = fromChain(chain), last = pts[pts.length - 1], leg = gridLeg(last.x, last.y, dx, dy);
+    return leg ? [...pts, ...leg.slice(1)] : [...pts, P(dx, dy, B1)];
   }
   const chain = graphChain(px, py, pl, new Set(d.nodes), seeds);
   if (!chain) return null;
@@ -1519,7 +1520,7 @@ function drawMini() {
   mg.font = 'bold 10px system-ui, sans-serif'; mg.textAlign = 'center'; mg.textBaseline = 'middle';
   for (const d of data.dest) {
     if (String(d.level) !== pl || d.t === 'plat' || d.t === 'elev' || d.t === 'spot') continue;
-    const [x, y] = W2S(d.x, d.y);
+    const [x, y] = W2S(...(d.foot || [d.x, d.y])); // 地上へ出る出口は階段の足元に
     if (x < -20 || y < -20 || x > W + 20 || y > H + 20) continue;
     const t = d.t === 'gate' || d.t === 'exit' || d.t === 'ogate' ? d.name : d.t === 'fac' ? FAC_ICON[d.kind][0] : d.kind === 'M' ? '♂' : d.kind === 'F' ? '♀' : '♿';
     mg.fillStyle = d.t === 'gate' || d.t === 'exit' ? '#f5c400' : d.t === 'ogate' ? '#e4d8f3' : d.t === 'fac' ? FAC_ICON[d.kind][1] : '#1c3f74';
@@ -1536,7 +1537,7 @@ function drawMini() {
     mg.fillStyle = '#f5c400'; mg.fillRect(x - w / 2, y - 7, w, 14);
     mg.fillStyle = '#111'; mg.fillText(t, x, y);
   }
-  const goal = nav.dest ? [nav.dest.x, nav.dest.y, true] : replay.samples ? (() => { const e = replay.samples[replay.samples.length - 1]; return [e.x, e.y, String(levelOf(e.z)) === pl]; })() : herePin ? [herePin.x, herePin.y, String(herePin.level) === pl] : null; // 足あとの終わり・「ここにいます」の相手も、その階を出しているとき
+  const goal = nav.dest ? [...(nav.dest.foot || [nav.dest.x, nav.dest.y]), true] : replay.samples ? (() => { const e = replay.samples[replay.samples.length - 1]; return [e.x, e.y, String(levelOf(e.z)) === pl]; })() : herePin ? [herePin.x, herePin.y, String(herePin.level) === pl] : null; // 足あとの終わり・「ここにいます」の相手も、その階を出しているとき
   if (goal && goal[2]) {
     const [x, y] = W2S(goal[0], goal[1]);
     mg.fillStyle = '#e8453c'; mg.beginPath(); mg.arc(x, y - 9, 6, 0, Math.PI * 2); mg.moveTo(x - 5, y - 6); mg.lineTo(x, y); mg.lineTo(x + 5, y - 6); mg.fill();

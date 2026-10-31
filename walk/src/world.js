@@ -127,7 +127,8 @@ function materials() {
     nosing: lam({ color: '#e0b419' }),
     esc: lam({ color: '#8b9197' }),
     rail: lam({ color: '#5b5f63' }),
-    side: lam({ color: '#cfc9bd', side: THREE.DoubleSide }),
+    side: lam({ map: panelTexture('#d3cdc1', '#9f988b', 1.0), side: THREE.DoubleSide }), // 階段の横の壁・出口の階段室の壁（一色だと面の向きが分からず見づらかった。利用者 2026-10-31「階段の壁が単色で見辛い」）
+    mallStair: lam({ map: panelTexture('#b9b3a8', '#8c867b', 0.5), side: THREE.DoubleSide }), // 地下街の階段の蹴上げ・横の面
     mallFloor: lam({ map: tileTexture('#d6d0c6', '#c0b8aa') }),
     mallWall: lam({ map: panelTexture('#e9e3d8', '#cdc5b6', 1.2), side: THREE.DoubleSide }),
     mallCeil: lam({ color: '#f3f2ee', emissive: '#b9b6ae', side: THREE.DoubleSide }),
@@ -732,7 +733,7 @@ export function buildWorld(data, mallBuf, scene) {
   const mallMeshes = [
     meshOf(toThree(mf), M.mallFloor, { uv: true }), meshOf(toThree(get('wall')), M.mallWall, { uv: 'side' }), meshOf(toThree(get('ceil')), M.mallCeil),
     meshOf(toThree(get('inst')), M.mallInst), meshOf(toThree(get('door')), M.mallDoor),
-    meshOf(toThree(get('stair')), M.mallInst), // 階段の蹴上げ・側面（踏み面は床に入れてある。当たり判定には使わない）
+    meshOf(toThree(get('stair')), M.mallStair, { uv: 'side' }), // 階段の蹴上げ・側面（踏み面は床に入れてある。当たり判定には使わない）
     // 閉じる面（向こうがデータの範囲外。となりの建物・デパートの地下などへの口）は明るいガラスの面に
     meshOf(toThree(get('closure')), M.mallClosure, { uv: 'side' }),
     meshOf(toThree(get('pillar')), M.mallPillar, { uv: 'side' }),
@@ -820,7 +821,7 @@ export function buildWorld(data, mallBuf, scene) {
   // まとめて置く
   const UV = new Set(['concourse', 'platform', 'toilet', 'apron']);
   for (const [k, pos] of Object.entries(buckets)) {
-    const mesh = meshOf(pos, M[k], { uv: uvs[k] || UV.has(k), colors: k === 'shop' ? colors : null });
+    const mesh = meshOf(pos, M[k], { uv: uvs[k] || (k === 'side' ? 'side' : UV.has(k)), colors: k === 'shop' ? colors : null });
     mesh.name = k; // 確かめ用（どの部品か）
     if (k === 'glass') mesh.renderOrder = 2;
     scene.add(mesh);
