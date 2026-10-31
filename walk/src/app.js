@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvvxgjt7';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvxgjt7';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvxgjt7';
-import { addTrains } from './trains.js?v=mvvxgjt7';
-import { routeSteps, stepLine } from './steps.js?v=mvvxgjt7';
-import { initMeet } from './meet.js?v=mvvxgjt7';
+import { initPhoto } from './photo.js?v=mvvzy5e5';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvvzy5e5';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvvzy5e5';
+import { addTrains } from './trains.js?v=mvvzy5e5';
+import { routeSteps, stepLine } from './steps.js?v=mvvzy5e5';
+import { initMeet } from './meet.js?v=mvvzy5e5';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvvxgjt7'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvvzy5e5'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const PRE = window.ekisanpoPre || {}; // index.html で先に読みはじめたデータ（同じ駅のときだけ使う）
 const STATIONS = await (PRE.stations || Promise.reject()).catch(() => fetch(`data/stations.json${VER}`).then((r) => r.json()));
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
@@ -320,6 +320,7 @@ const view = $('view');
 const ptrs = new Map(); // id → {mode: 'look' | 'stick', x, y, ox, oy}
 const stick = { id: null, vx: 0, vy: 0 };
 view.addEventListener('pointerdown', (e) => {
+  if (mapMode) { if (!viewAnim) setMapMode(false); return; } // 地図で見ているときの右下の小さな立体: 押すと立体で見るに戻る
   view.setPointerCapture(e.pointerId);
   const W = innerWidth, H = innerHeight;
   const isStick = e.pointerType === 'touch' && stick.id == null && e.clientX < W * 0.45 && e.clientY > H * 0.35;
@@ -1750,6 +1751,7 @@ function setMapMode(on, anim = true) {
   mapMode = on;
   document.body.classList.toggle('mapMode', on);
   $('viewBtn').textContent = on ? '立体で見る' : '地図で見る';
+  view.title = on ? '押すと立体で見る' : '';
   miniSize();
   if (!reduce) {
     // FLIP: 切り替えたあとの位置から、前の位置に見えるよう変形しておき、変形を外して動かす
@@ -2248,13 +2250,15 @@ function drawCompass() {
 }
 
 // ---------- ループ ----------
-function resize() {
-  renderer.setSize(innerWidth, innerHeight, false);
-  camera.aspect = innerWidth / innerHeight;
+function resize() { // 立体の大きさ（地図で見ているときは右下の小さな立体の大きさ）
+  const w = view.clientWidth || innerWidth, h = view.clientHeight || innerHeight;
+  renderer.setSize(w, h, false);
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
   miniSize();
 }
 addEventListener('resize', resize);
+if (window.ResizeObserver) new ResizeObserver(() => resize()).observe(view); // 地図で見る ⇄ 立体で見るで大きさが変わったとき
 resize();
 
 let last = performance.now();
@@ -2339,7 +2343,7 @@ function frame(now) {
   if (photoCity && now - photoAt > 3000) { photoAt = now; photoCity.update(); } // スマホの写真の街並み: 近くのタイルを読み足す
   drawMini();
   drawCompass();
-  if (!mapMode || viewAnim) renderer.render(scene, camera); // 地図で見ているあいだは立体を描かない（切り替えのアニメーションの間は描く）
+  renderer.render(scene, camera); // 地図で見ているあいだは右下の小さな立体に描く
   requestAnimationFrame(frame);
 }
 $('loading').hidden = true;

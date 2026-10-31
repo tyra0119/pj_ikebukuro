@@ -224,13 +224,23 @@ body.touch .pc, body:not(.touch) .touch { display: none; }
 #meetPartner { background: #fff3e0; border-left: 3px solid #f08c00; padding: 6px 8px; border-radius: 6px; font-size: 13px; }
 
 /* 地図で見る（待ち合わせ案内と歩く立体を 1 つの画面に。利用者 2026-10-31「meet と walk を融合したい。シームレスに行き来できるように」）:
-   小さな地図を画面いっぱいに広げ、立体は描かない。待ち合わせ案内のパネルは地図を隠さないよう左の帯（スマホは下半分）にする */
+   小さな地図を画面いっぱいに広げ、立体は右下に小さく出す。待ち合わせ案内のパネルは地図を隠さないよう左の帯（スマホは下半分）にする */
 body.mapMode #mini { left: 0; top: 0; right: 0; bottom: 0; width: 100vw; height: 100vh; height: 100dvh; border-radius: 0; box-shadow: none; z-index: 1; }
 body.mapMode #top, body.mapMode #leftBtns, body.mapMode #guide, body.mapMode #replayBar { z-index: 2; }
 body.mapMode #credit { z-index: 2; color: #555; text-shadow: none; background: rgba(255,255,255,0.7); padding: 1px 4px; border-radius: 4px; }
 body.mapMode #view, body.mapMode #stick, body.mapMode #mBig, body.mapMode #compass { visibility: hidden; }
 body.mapMode.viewAnim #view { visibility: visible; } /* 地図へ切り替えるアニメーションのあいだ、カメラが上がる立体を見せる */
-body.mapMode .mapBtns { right: 12px; bottom: calc(max(12px, env(safe-area-inset-bottom)) + 18px); }
+/* 地図で見ているあいだは、右下に小さな立体（人の目線）を出す。押すと立体で見るに戻る（利用者 2026-10-31「「地図で見る」を選択した場合、右下に「立体図」を表示するのは難しい？」）。
+   地図のボタンはその上に。--pipW・--pipH: 小さな立体の幅・高さ、--pipB: 画面の下からの位置 */
+body { --pipW: 220px; --pipH: 150px; --pipB: calc(max(12px, env(safe-area-inset-bottom)) + 12px); }
+body.mapMode:not(.viewAnim) #view { visibility: visible; inset: auto; right: 12px; bottom: var(--pipB); width: var(--pipW); height: var(--pipH); border-radius: 12px; box-shadow: var(--shadow); z-index: 2; cursor: pointer; transform-origin: 100% 100%; animation: pipIn 0.3s ease-out; }
+@keyframes pipIn { from { opacity: 0; transform: scale(0.7); } }
+#pipTag { display: none; }
+body.mapMode:not(.viewAnim) #pipTag { display: block; position: fixed; z-index: 3; right: calc(12px + var(--pipW) - 6px); bottom: calc(var(--pipB) + var(--pipH) - 6px); transform: translate(100%, 100%); padding: 2px 7px; border-radius: 6px; background: rgba(28, 35, 51, 0.78); color: #fff; font-size: 11px; pointer-events: none; animation: pipIn 0.3s ease-out; }
+body.mapMode .mapBtns { right: 12px; bottom: calc(var(--pipB) + var(--pipH) + 12px); }
+body.mapMode.meetBottom { --pipW: 132px; --pipH: 96px; --pipB: calc(52vh + 10px); }
+body.mapMode.meetBottom .mapBtns { right: calc(var(--pipW) + 22px); bottom: 10px; } /* スマホで案内のパネルを開いた地図は低いので、ボタンは小さな立体の左に */
+@media (max-width: 600px) { body { --pipW: 150px; --pipH: 110px; } }
 body.mapMode .floorPick { left: auto; right: 12px; top: 64px; max-height: calc(100% - 300px); }
 body.mapMode #viewBtn { background: var(--accent); color: #fff; }
 body.mapMode #meetPanel { inset: auto; left: 0; top: 0; bottom: 0; width: min(400px, 100vw); background: none; place-items: stretch; pointer-events: none; }
