@@ -137,6 +137,7 @@ function materials() {
     groundFloor: lam({ map: tileTexture('#cfcac0', '#b9b3a7') }), // 地上の歩道・道路（写真の街並みでは航空写真に替える）
     groundBldg: lam({ map: panelTexture('#d9d4cb', '#bdb6aa', 3.0), side: THREE.DoubleSide }), // 地上の建物の壁（写真の街並みでは隠す）
     groundRoad: lam({ map: tileTexture('#6f7175', '#66686c', 128, 4) }), // 地上の道路（アスファルト）
+    groundWall: lam({ map: panelTexture('#c8c4bb', '#a29d93', 2.0), side: THREE.DoubleSide }), // 高架のふちの擁壁・手すりの壁（コンクリート）
     mallDoor: new THREE.MeshLambertMaterial({ color: '#b5d3df', transparent: true, opacity: 0.45, side: THREE.DoubleSide, depthWrite: false }),
     mallClosure: lam({ map: panelTexture('#c9c5bd', '#9d988f', 0.45), side: THREE.DoubleSide }), // データの範囲外への口（閉まったシャッターのつもり。明るいガラス風だと「半透明の壁の先に行けない」と見えた）
     track: lam({ color: '#8a7f70' }),
@@ -733,16 +734,18 @@ export function buildWorld(data, mallBuf, scene) {
   const downward = (src) => { const o = src.slice(); for (let i = 0; i < o.length; i += 9) { const nz = (o[i + 3] - o[i]) * (o[i + 7] - o[i + 1]) - (o[i + 4] - o[i + 1]) * (o[i + 6] - o[i]); if (nz > 0) for (let c = 0; c < 3; c++) { const t = o[i + 3 + c]; o[i + 3 + c] = o[i + 6 + c]; o[i + 6 + c] = t; } } return o; };
   const mf = get('floor');
   for (let i = 0; i < mf.length; i += 9) phys.addFloor([mf[i], mf[i + 1], mf[i + 2]], [mf[i + 3], mf[i + 4], mf[i + 5]], [mf[i + 6], mf[i + 7], mf[i + 8]]);
-  for (const k of ['wall', 'inst', 'pillar', 'closure', 'bwall']) { const w = get(k); for (let i = 0; i < w.length; i += 9) phys.addWallTri(w.subarray(i, i + 9)); } // 閉じる面（向こうはデータの範囲外）・地上の建物の壁も当たる
+  for (const k of ['wall', 'inst', 'pillar', 'closure', 'bwall', 'gwall']) { const w = get(k); for (let i = 0; i < w.length; i += 9) phys.addWallTri(w.subarray(i, i + 9)); } // 閉じる面（向こうはデータの範囲外）・地上の建物の壁も当たる
   // 地上: 歩道・道路の床（gfloor）と建物の壁（bwall）。写真の街並み（photo.js）で、床には航空写真を貼り、建物は PLATEAU の写真の建物に替える（当たり判定はこの壁のまま）
   const gf = get('gfloor');
   for (let i = 0; i < gf.length; i += 9) phys.addFloor([gf[i], gf[i + 1], gf[i + 2]], [gf[i + 3], gf[i + 4], gf[i + 5]], [gf[i + 6], gf[i + 7], gf[i + 8]]);
-  // 道路（歩道より 0.12 m 低い床）は濃いアスファルト、歩道は明るい石畳に分ける。写真の街並みでは両方に航空写真を貼る
+  // 道路（歩道より 0.02 m 低い床）は濃いアスファルト、歩道は明るい石畳に分ける。写真の街並みでは両方に航空写真を貼る
   const gz = data.levels['1'] ? data.levels['1'].z : 0, side = [], road = [];
-  for (let i = 0; i < gf.length; i += 9) (Math.max(gf[i + 2], gf[i + 5], gf[i + 8]) < gz - 0.06 ? road : side).push(...gf.subarray(i, i + 9));
+  for (let i = 0; i < gf.length; i += 9) (Math.max(gf[i + 2], gf[i + 5], gf[i + 8]) < gz - 0.01 ? road : side).push(...gf.subarray(i, i + 9));
   const groundMeshes = [meshOf(toThree(new Float32Array(side)), M.groundFloor, { uv: true }), meshOf(toThree(get('bwall')), M.groundBldg, { uv: 'side' }), meshOf(toThree(new Float32Array(road)), M.groundRoad, { uv: true })];
   groundMeshes[0].name = 'groundFloor'; groundMeshes[1].name = 'groundBldg'; groundMeshes[2].name = 'groundRoad';
   scene.add(...groundMeshes);
+  // 高い地上（新宿の甲州街道の高架・2 階のデッキ）のふちの擁壁と手すりの壁（gwall。写真の街並みでも隠さない）
+  if (get('gwall').length) { const gw = meshOf(toThree(get('gwall')), M.groundWall, { uv: 'side' }); gw.name = 'groundWall'; scene.add(gw); }
   const mallMeshes = [
     meshOf(toThree(mf), M.mallFloor, { uv: true }), meshOf(toThree(get('wall')), M.mallWall, { uv: 'side' }), meshOf(toThree(downward(get('ceil'))), M.mallCeil),
     meshOf(toThree(get('inst')), M.mallInst), meshOf(toThree(get('door')), M.mallDoor),

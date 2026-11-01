@@ -2,18 +2,18 @@
 // 操作（PC）: WASD・矢印キーで歩く、ドラッグで見回す。（スマホ）左側を押したまま動かすと歩く、右側をなぞると見回す。
 
 import * as THREE from 'three';
-import { initPhoto } from './photo.js?v=mvx39rbl';
-import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvx39rbl';
-import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvx39rbl';
-import { addTrains } from './trains.js?v=mvx39rbl';
-import { routeSteps, stepLine } from './steps.js?v=mvx39rbl';
-import { initMeet } from './meet.js?v=mvx39rbl';
+import { initPhoto } from './photo.js?v=mvx3xejk';
+import { buildWorld, addGateRow, EYE, STEP } from './world.js?v=mvx3xejk';
+import { encodeTrack, decodeTrack, startVideo, SAMPLE_MS, MAX_SAMPLES } from './record.js?v=mvx3xejk';
+import { addTrains } from './trains.js?v=mvx3xejk';
+import { routeSteps, stepLine } from './steps.js?v=mvx3xejk';
+import { initMeet } from './meet.js?v=mvx3xejk';
 
 const $ = (id) => document.getElementById(id);
 const touchUI = matchMedia('(pointer: coarse)').matches;
 if (touchUI) document.body.classList.add('touch');
 
-const VER = '?v=mvx39rbl'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+const VER = '?v=mvx3xejk'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
 const PRE = window.ekisanpoPre || {}; // index.html で先に読みはじめたデータ（同じ駅のときだけ使う）
 const STATIONS = await (PRE.stations || Promise.reject()).catch(() => fetch(`data/stations.json${VER}`).then((r) => r.json()));
 const ST = STATIONS.find((s) => s.key === new URLSearchParams(location.search).get('st')) || STATIONS[0];
@@ -1488,7 +1488,7 @@ for (const l of Object.keys(LV)) {
   const gside = chunks(), groad = chunks(), gbld = chunks();
   if (l === '1' && data.mall && data.mall.layout.gfloor) {
     const L = data.mall.layout.gfloor, f = new Float32Array(mallBuf, L[0], L[1]), gz = LV[l].z;
-    for (let i = 0; i < f.length; i += 9) tri(Math.max(f[i + 2], f[i + 5], f[i + 8]) < gz - 0.06 ? groad : gside, f, i);
+    for (let i = 0; i < f.length; i += 9) tri(Math.max(f[i + 2], f[i + 5], f[i + 8]) < gz - 0.01 ? groad : gside, f, i);
     for (const r of data.gbld || []) ring(gbld, r);
   }
   paths[l] = { floor, block, wall, mall, gside, groad, gbld };
