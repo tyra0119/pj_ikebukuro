@@ -5,25 +5,25 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover">
 <title>エキさんぽ</title>
 <meta name="description" content="JR の駅（池袋・東京・新宿・渋谷・品川・高輪ゲートウェイ）と地下街を、人の目線で自由に歩き回れる立体の構内図">
-<link rel="stylesheet" href="src/style.css?v=mvw5cidi">
+<link rel="stylesheet" href="src/style.css?v=mvx39rbl">
 <script type="importmap">
 { "imports": { "three": "https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js" } }
 </script>
 <!-- 最初の読み込みを速く（利用者 2026-10-31「最初の読み込みが随分と遅い」）: プログラムの部品は先読みし、駅のデータ（立体・地下街・待ち合わせ案内）は
      部品を読み終えるのを待たずにすぐ読みはじめる（app.js・meet.js が window.ekisanpoPre を使う）。前は部品 → 駅の一覧 → 駅のデータ → 立体を組む → 案内のデータと順に待っていた -->
 <link rel="modulepreload" href="https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js">
-<link rel="modulepreload" href="src/app.js?v=mvw5cidi">
-<link rel="modulepreload" href="src/world.js?v=mvw5cidi">
-<link rel="modulepreload" href="src/meet.js?v=mvw5cidi">
-<link rel="modulepreload" href="src/trains.js?v=mvw5cidi">
-<link rel="modulepreload" href="src/guide.js?v=mvw5cidi">
+<link rel="modulepreload" href="src/app.js?v=mvx39rbl">
+<link rel="modulepreload" href="src/world.js?v=mvx39rbl">
+<link rel="modulepreload" href="src/meet.js?v=mvx39rbl">
+<link rel="modulepreload" href="src/trains.js?v=mvx39rbl">
+<link rel="modulepreload" href="src/guide.js?v=mvx39rbl">
 <link rel="modulepreload" href="src/record.js">
 <link rel="modulepreload" href="src/photo.js">
 <link rel="modulepreload" href="src/steps.js">
 <link rel="modulepreload" href="src/room.js">
 <script>
 (() => {
-  const V = '?v=mvw5cidi'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
+  const V = '?v=mvx39rbl'; // 公開用に書き出すとき、版の印（?v=…）に置きかえる（tools/publish.mjs）
   const key = new URLSearchParams(location.search).get('st') || 'ikebukuro'; // 一覧に無い駅なら app.js が読み直す
   const get = (u, bin) => { const p = fetch(u + V).then((r) => { if (!r.ok) throw new Error(u); return bin ? r.arrayBuffer() : r.json(); }); p.catch(() => {}); return p; };
   window.ekisanpoPre = { key, stations: get('data/stations.json'), data: get(`data/${key}.json`), mall: get(`data/${key}-mall.bin`, true), meet: get(`data/${key === 'ikebukuro' ? 'meet' : `meet-${key}`}.json`) };
@@ -208,7 +208,7 @@
       <li>壁や改札機にはぶつかります。改札機のあいだを通り抜けてください</li>
     </ul>
     <p id="helpCredit" class="note"></p>
-    <p class="note"><a href="manual.html" target="_blank" rel="noopener">使い方（録画と共有・URL・データ）</a>　版: <span id="appVer">10/31 17:36（mvw5cidi）</span></p>
+    <p class="note"><a href="manual.html" target="_blank" rel="noopener">使い方（録画と共有・URL・データ）</a>　版: <span id="appVer">11/1 09:25（mvx39rbl）</span></p>
     <button id="helpOk" class="btn primary" type="button">歩きはじめる</button>
   </div>
 </div>
@@ -216,6 +216,6 @@
 <footer id="credit"></footer>
 <div id="loading">読み込み中…</div>
 
-<script type="module" src="src/app.js?v=mvw5cidi"></script>
+<script type="module" src="src/app.js?v=mvx39rbl"></script>
 </body>
 </html>
